@@ -1,0 +1,22 @@
+# ── Kernel module 編譯產物（都是 build 自動生成，不該進版本控制）──
+*.o
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+*.symvers
+*.order
+modules.order
+Module.symvers
+.tmp_versions/
+
+# 內核 build 系統的隱藏命令檔（.hello.o.cmd 之類）
+.*.cmd
+
+# ── 編輯器 / 個人環境（含機器專屬絕對路徑，不適合分享）──
+.vscode/
+
+# ── 暫存 / 雜項 ──
+*.swp
+*~
+_*.sh
