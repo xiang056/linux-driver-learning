@@ -1,0 +1,8 @@
+WSL2-Linux-Kernel-linux-msft-wsl-6.6.114.1/
+linux-msft-wsl-6.6.114.1.tar.gz
+*.ko
+*.o
+*.mod
+*.mod.c
+modules.order
+Module.symvers
