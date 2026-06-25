@@ -9,14 +9,14 @@
 ## 📍 目前位置（每次開工先看這裡）
 
 - **階段**：第一階段 — Linux 基礎 + 環境建置（8 週）
-- **進度**：Week 1-2 · WSL2 環境 + Linux 基礎命令
-- **完成度**：約 8%（hello.ko + hello_param.ko 完成，含 insmod 實測）
+- **進度**：Week 3-4 · LDD3 Ch3 Char Device Driver 理論完成
+- **完成度**：約 15%（hello.ko + hello_param.ko + simple_gpio 程式碼完成，待回家實測）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事
-1. 讀 LDD3 § 1（導言）+ § 2（構建和運行模塊）
-2. 從源碼找到 `printk` 定義位置（小測驗）
-3. 開始 `simple_gpio`：第一個字符設備驅動（LDD3 Ch3 簡化版，`register_chrdev` + file_operations）
+1. 回家：`git pull` → `make` → `insmod simple_gpio.ko` → 實測
+2. 確認 `cat /dev/simple_gpio` 和 `echo "gpio_on" > /dev/simple_gpio` 正常運作
+3. 下一章：LDD3 Ch4（Debugging）或繼續 Ch3 進階概念
 
 ---
 
@@ -24,9 +24,9 @@
 
 | 階段 | 週次 | 主題 | 狀態 |
 |------|------|------|------|
-| 一 | W1-2 | WSL2 環境 + 基礎命令 | 🟡 進行中 |
-| 一 | W3-4 | 內核源碼導航 + 驅動入門 | ⬜ |
-| 一 | W5-6 | Character Device Driver | ⬜ |
+| 一 | W1-2 | WSL2 環境 + 基礎命令 | ✅ 完成 |
+| 一 | W3-4 | 內核源碼導航 + 驅動入門 | ✅ 完成 |
+| 一 | W5-6 | Character Device Driver | 🟡 進行中（理論完成，實測待做） |
 | 一 | W7-8 | 中斷與同步原語 | ⬜ |
 | 二 | W9-10 | LDD3 Ch3-4 · scull 驅動 | ⬜ |
 | 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | ⬜ |
@@ -47,7 +47,7 @@
 |------|------|------|------|
 | hello | `~/linux-dev/hello_module/` | 最小 kernel module | ✅ 已編譯 hello.ko |
 | hello_param | `~/linux-dev/hello_param/` | 帶 module_param 的 module | ✅ 已 insmod 實測（int/charp/array + sysfs 0644） |
-| simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化） | ⬜ 空資料夾 |
+| simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化） | 🟡 程式碼完成，待回家實測 |
 | scull | （待建） | LDD3 官方 scull + ioctl/lseek 擴展 | ⬜ |
 | timer | （待建） | 定時器驅動 | ⬜ |
 | platform uart | （待建） | platform_driver + device tree | ⬜ |
@@ -69,6 +69,22 @@
   - 實測：往 `/sys/.../parameters/param_value` 寫 999 → 卸載時 exit 印出 999，證明 sysfs 寫入直接改到運行中內核的變數（不是副本）。
   - `MODULE_PARM_DESC` 的描述會出現在 `modinfo` 的 `parm:` 行。
 - _（待補：用戶空間 vs 內核空間隔離邊界、/dev 用途）_
+
+### Week 3-4
+- **2026-06-25** 讀完 LDD3 Ch3，完成 `simple_gpio.c`（含詳細註解版 + 填空練習版）
+  - **Major/Minor number**：major 對應 driver，minor 對應同 driver 下的第幾個裝置。用 `alloc_chrdev_region` 動態申請，不要靜態指定（避免衝突）。
+  - **三個重要資料結構**：
+    - `file_operations`：callback 表，告訴 kernel 呼叫哪個函式（類比 STM32 的 HAL callback）
+    - `struct file`：每次 open 產生一個，`private_data` 用來在 open/read/write 之間傳遞裝置資料
+    - `struct cdev`：把號碼和 fops 綁在一起，`cdev_add` 後裝置上線
+  - **Driver 生命週期順序**：
+    - init：`alloc_chrdev_region` → `cdev_init` → `cdev_add`
+    - exit：`cdev_del` → `unregister_chrdev_region`（反序！先下線再釋放號碼）
+  - **user/kernel 資料傳輸**：
+    - `copy_to_user`：read 時，kernel → user
+    - `copy_from_user`：write 時，user → kernel
+    - 不能直接 memcpy：user space 虛擬位址在 kernel mode 可能無效、記憶體可能被 swap、惡意位址安全漏洞
+  - **`cat` 停止的原理**：`read()` 回傳 0 = EOF，`cat` 才會停止；不回傳 0 會無限讀下去
 
 <!-- 之後每週往下加，格式：日期 + 學到的關鍵點 / 踩到的坑 -->
 
