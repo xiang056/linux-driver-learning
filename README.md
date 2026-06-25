@@ -1,6 +1,6 @@
 # Linux 驅動學習筆記
 
-從 STM32 韌體工程師轉往 Embedded Linux，跟著 LDD3 從零開始寫 kernel module。
+跟著 LDD3 從零開始寫 kernel module。
 
 - 環境：WSL2 Ubuntu 22.04
 - 進度：LDD3 Ch1～Ch3 完成
