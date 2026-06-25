@@ -9,14 +9,14 @@
 ## 📍 目前位置（每次開工先看這裡）
 
 - **階段**：第一階段 — Linux 基礎 + 環境建置（8 週）
-- **進度**：Week 3-4 · LDD3 Ch3 Char Device Driver 理論完成
-- **完成度**：約 15%（hello.ko + hello_param.ko + simple_gpio 程式碼完成，待回家實測）
+- **進度**：Week 5-6 · LDD3 Ch3 Char Device Driver 實測完成
+- **完成度**：約 20%（hello.ko + hello_param.ko + simple_gpio.ko 全部實測通過）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事
-1. 回家：`git pull` → `make` → `insmod simple_gpio.ko` → 實測
-2. 確認 `cat /dev/simple_gpio` 和 `echo "gpio_on" > /dev/simple_gpio` 正常運作
-3. 下一章：LDD3 Ch4（Debugging）或繼續 Ch3 進階概念
+1. 下一章：LDD3 Ch4（Debugging）— `printk` log level、`/proc`、`strace`、`gdb`
+2. 或繼續 Ch3 進階：`ioctl`、`lseek`、blocking I/O
+3. 開始建立 `scull` 驅動（LDD3 官方範例）
 
 ---
 
@@ -26,7 +26,7 @@
 |------|------|------|------|
 | 一 | W1-2 | WSL2 環境 + 基礎命令 | ✅ 完成 |
 | 一 | W3-4 | 內核源碼導航 + 驅動入門 | ✅ 完成 |
-| 一 | W5-6 | Character Device Driver | 🟡 進行中（理論完成，實測待做） |
+| 一 | W5-6 | Character Device Driver | ✅ 完成（simple_gpio 實測通過） |
 | 一 | W7-8 | 中斷與同步原語 | ⬜ |
 | 二 | W9-10 | LDD3 Ch3-4 · scull 驅動 | ⬜ |
 | 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | ⬜ |
@@ -47,7 +47,7 @@
 |------|------|------|------|
 | hello | `~/linux-dev/hello_module/` | 最小 kernel module | ✅ 已編譯 hello.ko |
 | hello_param | `~/linux-dev/hello_param/` | 帶 module_param 的 module | ✅ 已 insmod 實測（int/charp/array + sysfs 0644） |
-| simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化） | 🟡 程式碼完成，待回家實測 |
+| simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化） | ✅ 已 insmod 實測（read/write/mknod 全通過） |
 | scull | （待建） | LDD3 官方 scull + ioctl/lseek 擴展 | ⬜ |
 | timer | （待建） | 定時器驅動 | ⬜ |
 | platform uart | （待建） | platform_driver + device tree | ⬜ |
@@ -86,6 +86,12 @@
     - 不能直接 memcpy：user space 虛擬位址在 kernel mode 可能無效、記憶體可能被 swap、惡意位址安全漏洞
   - **`cat` 停止的原理**：`read()` 回傳 0 = EOF，`cat` 才會停止；不回傳 0 會無限讀下去
 
+### Week 5-6
+- **2026-06-25** 實測 `simple_gpio.ko` 完整通過
+  - **`mknod` 手動建立裝置節點**：`sudo mknod /dev/simple_gpio c <major> 0`；major 號從 `dmesg` 看（本次 240）
+  - **寫入需要 root**：`echo "x" > /dev/simple_gpio` 會 Permission denied，要用 `echo "x" | sudo tee /dev/simple_gpio`
+  - **踩坑：`simple_gpio` Makefile 的 KDIR 指向 `/lib/modules/.../build`**，該連結不存在；改成指向 `~/linux-dev/my_module/WSL2-Linux-Kernel-linux-msft-wsl-6.6.114.1` 才能編譯（與 `my_module` 相同路徑）
+
 <!-- 之後每週往下加，格式：日期 + 學到的關鍵點 / 踩到的坑 -->
 
 ---
@@ -97,6 +103,8 @@
 | 2026-06-11 | `make` 報 `/lib/modules/$(uname -r)/build: No such file` | WSL2 內核更新後，`build` 符號連結掉了 | `sudo ln -sfn /usr/src/wsl2-headers-$(uname -r) /lib/modules/$(uname -r)/build` |
 | 2026-06-11 | modpost 報 `_printk`/`module_layout` undefined | 內核源碼樹的 `Module.symvers` 是 0 bytes（只做過 modules_prepare，沒完整編過內核），`CONFIG_MODVERSIONS=y` 解析不到符號 | 在源碼樹 `make -j$(nproc)` 完整編一次內核 → 產生齊全的 Module.symvers（一次性，之後所有模組都能用） |
 | 2026-06-11 | `insmod` 預期會報 version magic 不匹配 | 本地重編的 vermagic 結尾多一個 `+`（git 樹 + `CONFIG_LOCALVERSION_AUTO` off 時 `scm_version --short` 會加），運行內核沒有 `+` | build 時設 `LOCALVERSION=`（空但已設定），跳過 setlocalversion 加 `+` 的分支；重生 `kernel.release`/`utsrelease.h` 後重編模組 |
+| 2026-06-25 | `simple_gpio` make 報 `/lib/modules/.../build: No such file` | Makefile KDIR 指向系統 build 符號連結，WSL2 沒有對應 headers | 改 KDIR 指向已完整編譯的 kernel source：`~/linux-dev/my_module/WSL2-Linux-Kernel-linux-msft-wsl-6.6.114.1` |
+| 2026-06-25 | `echo "gpio_on" > /dev/simple_gpio` 報 Permission denied | shell 重導向由目前 user 執行，不繼承 sudo 權限 | 改用 `echo "gpio_on" \| sudo tee /dev/simple_gpio` |
 
 > 註：源碼樹原本屬 root，編譯前先 `sudo chown -R $USER /usr/src/wsl2-headers-$(uname -r)`，之後編模組就不用 sudo（只有 insmod/rmmod 需要 root）。
 

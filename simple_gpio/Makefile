@@ -1,5 +1,5 @@
 obj-m := simple_gpio.o
-KDIR := /lib/modules/$(shell uname -r)/build
+KDIR := $(HOME)/linux-dev/my_module/WSL2-Linux-Kernel-linux-msft-wsl-6.6.114.1
 
 all:
 	make -C $(KDIR) M=$(PWD) modules
