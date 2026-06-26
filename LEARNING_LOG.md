@@ -9,13 +9,13 @@
 ## 📍 目前位置（每次開工先看這裡）
 
 - **階段**：第一階段 — Linux 基礎 + 環境建置（8 週）
-- **進度**：Week 5-6 · LDD3 Ch3 Char Device Driver 實測完成
-- **完成度**：約 20%（hello.ko + hello_param.ko + simple_gpio.ko 全部實測通過）
+- **進度**：Week 7 · ioctl 擴展程式碼完成 + LDD3 Ch4 閱讀完成
+- **完成度**：約 23%（ioctl 程式碼完成待實測、Ch4 理論讀完）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事
-1. 下一章：LDD3 Ch4（Debugging）— `printk` log level、`/proc`、`strace`、`gdb`
-2. 或繼續 Ch3 進階：`ioctl`、`lseek`、blocking I/O
+1. **[回家]** WSL2 實測 `simple_gpio` ioctl（編譯 + `gpio_test` 跑完 + dmesg 確認）
+2. 繼續 Ch3 進階：`lseek`、blocking I/O
 3. 開始建立 `scull` 驅動（LDD3 官方範例）
 
 ---
@@ -27,8 +27,8 @@
 | 一 | W1-2 | WSL2 環境 + 基礎命令 | ✅ 完成 |
 | 一 | W3-4 | 內核源碼導航 + 驅動入門 | ✅ 完成 |
 | 一 | W5-6 | Character Device Driver | ✅ 完成（simple_gpio 實測通過） |
-| 一 | W7-8 | 中斷與同步原語 | ⬜ |
-| 二 | W9-10 | LDD3 Ch3-4 · scull 驅動 | ⬜ |
+| 一 | W7-8 | ioctl 擴展 + Ch4 Debugging | 🟡 進行中（程式碼完成 + Ch4 讀完，待 WSL2 實測） |
+| 二 | W9-10 | lseek + blocking I/O + scull 驅動 | ⬜ |
 | 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | ⬜ |
 | 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | ⬜ |
 | 二 | W15-16 | Platform Driver + Device Tree | ⬜ |
@@ -47,7 +47,7 @@
 |------|------|------|------|
 | hello | `~/linux-dev/hello_module/` | 最小 kernel module | ✅ 已編譯 hello.ko |
 | hello_param | `~/linux-dev/hello_param/` | 帶 module_param 的 module | ✅ 已 insmod 實測（int/charp/array + sysfs 0644） |
-| simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化） | ✅ 已 insmod 實測（read/write/mknod 全通過） |
+| simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化）+ ioctl 擴展 | 🟡 ioctl 程式碼完成，待 WSL2 實測 |
 | scull | （待建） | LDD3 官方 scull + ioctl/lseek 擴展 | ⬜ |
 | timer | （待建） | 定時器驅動 | ⬜ |
 | platform uart | （待建） | platform_driver + device tree | ⬜ |
@@ -85,6 +85,31 @@
     - `copy_from_user`：write 時，user → kernel
     - 不能直接 memcpy：user space 虛擬位址在 kernel mode 可能無效、記憶體可能被 swap、惡意位址安全漏洞
   - **`cat` 停止的原理**：`read()` 回傳 0 = EOF，`cat` 才會停止；不回傳 0 會無限讀下去
+
+### Week 7
+- **2026-06-26** 閱讀 LDD3 Ch4（Debugging Techniques）
+  - **Ch4 定位**：工具層，不是底層知識。Ch3 driver 出問題時才真的用得到，現階段讀過知道有這些工具即可，遇到問題再回來查
+  - **printk log level**：8 級（EMERG=0 最嚴重 → DEBUG=7），`console_loglevel` 決定哪些印到畫面，其餘只進 dmesg
+  - **可開關 debug 巨集**：用 `#ifdef SCULL_DEBUG` 包 `PDEBUG`，Makefile 加 `-DSCULL_DEBUG` 開啟，release 版不用改程式碼
+  - **printk_ratelimit()**：避免錯誤發生時每秒噴幾千行 log
+  - **查詢系統狀態**：`/proc`（簡單但不推薦）、`ioctl`（快、binary）、`sysfs`（現代推薦，Ch14）
+  - **strace**：看 user space 所有 system call 的參數和回傳值，可確認 driver 行為正不正確
+  - **oops 訊息**：看 `EIP is at 函式名+offset [module]` → 找出問題函式；Call Trace 往下追呼叫鏈
+  - **System hang**：在迴圈裡插 `schedule()` 讓其他 process 搶 CPU；Magic SysRq 緊急救援
+  - **gdb**：`gdb vmlinux /proc/kcore` 可看 kernel 變數，但不能設 breakpoint 也不能改資料
+  - **心得**：Ch4 在沒遇過 bug 的時候讀很抽象，等實測出問題再回來看會快很多
+- **2026-06-26** 實作 `simple_gpio` ioctl 擴展
+  - **ioctl 命令定義巨集**：
+    - `_IO(magic, nr)` — 不傳資料（例如 ON/OFF/TOGGLE）
+    - `_IOR(magic, nr, type)` — kernel → user（GET）
+    - `_IOW(magic, nr, type)` — user → kernel（SET）
+    - 產生 32-bit 編號，包含方向、magic、序號、資料大小
+  - **magic number**：選一個字元區分 driver，避免不同 driver 的 ioctl 號碼衝突
+  - **handler 命名**：`.unlocked_ioctl`，舊版 `.ioctl` 需要 BKL，2.6.36 後廢除
+  - **參數驗證三步驟**：① `_IOC_TYPE` 檢查 magic → ② `_IOC_NR` 檢查序號上限 → ③ `access_ok` 驗證 user 指標合法
+  - **put_user / get_user**：傳單一整數比 `copy_to_user`/`copy_from_user` 更輕量（不需要手動指定 size）
+  - **共用標頭**：`simple_gpio_ioctl.h` 同時被 kernel 和 user space include，是兩邊的「合約」
+  - 新增 `gpio_test.c` user space 測試程式，測試全部 5 個 ioctl 命令
 
 ### Week 5-6
 - **2026-06-25** 實測 `simple_gpio.ko` 完整通過
