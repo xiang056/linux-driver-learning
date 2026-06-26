@@ -9,14 +9,13 @@
 ## 📍 目前位置（每次開工先看這裡）
 
 - **階段**：第一階段 — Linux 基礎 + 環境建置（8 週）
-- **進度**：Week 7 · ioctl 擴展程式碼完成 + LDD3 Ch4 閱讀完成
-- **完成度**：約 23%（ioctl 程式碼完成待實測、Ch4 理論讀完）
+- **進度**：Week 7 · ioctl 擴展實測完成 + LDD3 Ch4 閱讀完成
+- **完成度**：約 25%（hello + hello_param + simple_gpio + ioctl 全部實測通過）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事
-1. **[回家]** WSL2 實測 `simple_gpio` ioctl（編譯 + `gpio_test` 跑完 + dmesg 確認）
-2. 繼續 Ch3 進階：`lseek`、blocking I/O
-3. 開始建立 `scull` 驅動（LDD3 官方範例）
+1. 繼續 Ch3 進階：`lseek`、blocking I/O
+2. 開始建立 `scull` 驅動（LDD3 官方範例）
 
 ---
 
@@ -27,7 +26,7 @@
 | 一 | W1-2 | WSL2 環境 + 基礎命令 | ✅ 完成 |
 | 一 | W3-4 | 內核源碼導航 + 驅動入門 | ✅ 完成 |
 | 一 | W5-6 | Character Device Driver | ✅ 完成（simple_gpio 實測通過） |
-| 一 | W7-8 | ioctl 擴展 + Ch4 Debugging | 🟡 進行中（程式碼完成 + Ch4 讀完，待 WSL2 實測） |
+| 一 | W7-8 | ioctl 擴展 + Ch4 Debugging | ✅ 完成（ioctl 5 個命令實測通過，Ch4 讀完） |
 | 二 | W9-10 | lseek + blocking I/O + scull 驅動 | ⬜ |
 | 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | ⬜ |
 | 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | ⬜ |
@@ -47,7 +46,7 @@
 |------|------|------|------|
 | hello | `~/linux-dev/hello_module/` | 最小 kernel module | ✅ 已編譯 hello.ko |
 | hello_param | `~/linux-dev/hello_param/` | 帶 module_param 的 module | ✅ 已 insmod 實測（int/charp/array + sysfs 0644） |
-| simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化）+ ioctl 擴展 | 🟡 ioctl 程式碼完成，待 WSL2 實測 |
+| simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化）+ ioctl 擴展 | ✅ 已實測（read/write/ioctl 5 命令全通過） |
 | scull | （待建） | LDD3 官方 scull + ioctl/lseek 擴展 | ⬜ |
 | timer | （待建） | 定時器驅動 | ⬜ |
 | platform uart | （待建） | platform_driver + device tree | ⬜ |
@@ -110,6 +109,10 @@
   - **put_user / get_user**：傳單一整數比 `copy_to_user`/`copy_from_user` 更輕量（不需要手動指定 size）
   - **共用標頭**：`simple_gpio_ioctl.h` 同時被 kernel 和 user space include，是兩邊的「合約」
   - 新增 `gpio_test.c` user space 測試程式，測試全部 5 個 ioctl 命令
+- **2026-06-27** 實測 `simple_gpio` ioctl 擴展完整通過
+  - 固定實測流程：`make` → `insmod` → `dmesg` 拿 major → `mknod` → `gcc gpio_test` → `./gpio_test` → `dmesg` 確認 → `rmmod` + `rm /dev/`
+  - dmesg 確認每個 ioctl 命令都有對應 kernel log（ON/OFF/TOGGLE/SET/GET）
+  - `[read] (empty)` 原因：ioctl 改變狀態後沒有更新字串緩衝區，功能正確但可改進
 
 ### Week 5-6
 - **2026-06-25** 實測 `simple_gpio.ko` 完整通過
