@@ -16,6 +16,9 @@ Module.symvers
 # ── 編輯器 / 個人環境（含機器專屬絕對路徑，不適合分享）──
 .vscode/
 
+# ── 編譯出來的執行檔 ──
+simple_gpio/gpio_test
+
 # ── 暫存 / 雜項 ──
 *.swp
 *~
