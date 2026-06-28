@@ -9,13 +9,14 @@
 ## 📍 目前位置（每次開工先看這裡）
 
 - **階段**：第一階段 — Linux 基礎 + 環境建置（8 週）
-- **進度**：Week 7 · ioctl 擴展實測完成 + LDD3 Ch4 閱讀完成
+- **進度**：Week 8 · scull 驅動骨架完成（init/exit/kmalloc/mknod）
 - **完成度**：約 25%（hello + hello_param + simple_gpio + ioctl 全部實測通過）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事
-1. 繼續 Ch3 進階：`lseek`、blocking I/O
-2. 開始建立 `scull` 驅動（LDD3 官方範例）
+1. 實作 `scull` 的 `file_operations`（open / read / write / release）
+2. 測試 `/dev/scull0` 讀寫功能
+3. 之後加 `lseek` / `ioctl` 擴展
 
 ---
 
@@ -27,7 +28,7 @@
 | 一 | W3-4 | 內核源碼導航 + 驅動入門 | ✅ 完成 |
 | 一 | W5-6 | Character Device Driver | ✅ 完成（simple_gpio 實測通過） |
 | 一 | W7-8 | ioctl 擴展 + Ch4 Debugging | ✅ 完成（ioctl 5 個命令實測通過，Ch4 讀完） |
-| 二 | W9-10 | lseek + blocking I/O + scull 驅動 | ⬜ |
+| 二 | W9-10 | lseek + blocking I/O + scull 驅動 | 🟡 進行中（scull 骨架完成） |
 | 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | ⬜ |
 | 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | ⬜ |
 | 二 | W15-16 | Platform Driver + Device Tree | ⬜ |
@@ -47,7 +48,7 @@
 | hello | `~/linux-dev/hello_module/` | 最小 kernel module | ✅ 已編譯 hello.ko |
 | hello_param | `~/linux-dev/hello_param/` | 帶 module_param 的 module | ✅ 已 insmod 實測（int/charp/array + sysfs 0644） |
 | simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化）+ ioctl 擴展 | ✅ 已實測（read/write/ioctl 5 命令全通過） |
-| scull | （待建） | LDD3 官方 scull + ioctl/lseek 擴展 | ⬜ |
+| scull | `~/linux-dev/scull/` | LDD3 官方 scull + ioctl/lseek 擴展 | 🟡 骨架完成（init/exit/kmalloc），file_operations 待實作 |
 | timer | （待建） | 定時器驅動 | ⬜ |
 | platform uart | （待建） | platform_driver + device tree | ⬜ |
 | gpio_sysfs | （待建） | QEMU GPIO + sysfs 接口 | ⬜ |
@@ -97,6 +98,17 @@
   - **System hang**：在迴圈裡插 `schedule()` 讓其他 process 搶 CPU；Magic SysRq 緊急救援
   - **gdb**：`gdb vmlinux /proc/kcore` 可看 kernel 變數，但不能設 breakpoint 也不能改資料
   - **心得**：Ch4 在沒遇過 bug 的時候讀很抽象，等實測出問題再回來看會快很多
+
+### Week 8
+- **2026-06-28** 建立 `scull` 驅動骨架（LDD3 Ch3 標準範例）
+  - **scull 是什麼**：Simple Character Utility for Loading Localities，用 kernel 記憶體模擬字元裝置，沒有真實硬體。write 存進 kmalloc buffer，read 從 buffer 讀回，像住在 kernel 裡的記事本
+  - **為什麼學 scull**：涵蓋 char driver 所有核心機制（major/minor、cdev、file_operations、copy_to/from_user、kmalloc），真實硬體驅動結構相同，只是把記憶體換成暫存器
+  - **骨架包含**：
+    - `scull.h`：定義 `scull_dev`（data buffer + size + cdev），4 個裝置 (`SCULL_NR_DEVS=4`)，buffer 4096 bytes
+    - `scull_init`：`alloc_chrdev_region` 動態申請 major → `kmalloc` 分配 4 個裝置陣列 → `memset` 清零
+    - `scull_exit`：逐一 `kfree` 各裝置 data → `kfree` 裝置陣列 → `unregister_chrdev_region`
+  - **實測結果**：編譯成功，insmod 取得 major=240，mknod 建立 `/dev/scull0~3`；cat/echo 回傳 "No such device or address"（正常，因為 `file_operations` 尚未實作）
+  - **下一步**：實作 `open` / `read` / `write` / `release` callback，讓 `/dev/scull0` 真正能讀寫
 - **2026-06-26** 實作 `simple_gpio` ioctl 擴展
   - **ioctl 命令定義巨集**：
     - `_IO(magic, nr)` — 不傳資料（例如 ON/OFF/TOGGLE）
