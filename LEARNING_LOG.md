@@ -8,8 +8,11 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-- **階段**：第一階段 — Linux 基礎 + 環境建置（8 週）
-- **進度**：Week 8 · scull 驅動骨架完成（init/exit/kmalloc/mknod）
+> 最後更新：2026-06-28
+
+- **階段**：第一階段 — Linux 基礎 + 環境建置
+- **實際時間**：第 2 週（計劃進度 W7-8，超前完成）
+- **進度**：scull 驅動骨架完成（init/exit/kmalloc/mknod）
 - **完成度**：約 25%（hello + hello_param + simple_gpio + ioctl 全部實測通過）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
