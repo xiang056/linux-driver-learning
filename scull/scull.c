@@ -46,10 +46,16 @@ static ssize_t scull_write(struct file *filp, const char __user *buf, size_t cou
         dev->data = kmalloc(SCULL_BUFFER_SIZE, GFP_KERNEL);
     if(!dev->data)
         return -ENOMEM;
+    if (*f_pos >= SCULL_BUFFER_SIZE)
+        return -ENOSPC;
     
     if(*f_pos + count > SCULL_BUFFER_SIZE){
         count = SCULL_BUFFER_SIZE - *f_pos;
+        if (count == 0)
+             return -ENOSPC;
     }
+
+
     if(copy_from_user(dev->data + *f_pos, buf, count))
         return -EFAULT;
 
@@ -67,7 +73,7 @@ static struct file_operations scull_fops = {
     .write = scull_write,
 };
 
-static void scull_setup_cdev(struct scull_dev *dev, int index)
+static int scull_setup_cdev(struct scull_dev *dev, int index)
 {
     int err;
     dev_t devno = MKDEV(scull_major, scull_minor + index);
@@ -76,7 +82,7 @@ static void scull_setup_cdev(struct scull_dev *dev, int index)
     err = cdev_add(&dev->cdev, devno, 1);
     if(err)
         printk(KERN_WARNING "scull: error %d adding scull%d\n", err, index);
-
+    return err;
 }
 
 
@@ -88,7 +94,7 @@ static int __init scull_init(void)
     /* 動態分配 major number */
     result = alloc_chrdev_region(&dev, scull_minor, SCULL_NR_DEVS, "scull");
     if (result < 0) {
-        printk(KERN_WARNING "scull: can't get major %d\n", scull_major);
+        printk(KERN_WARNING "scull: can't get major %d\n", result);
         return result;
     }
     scull_major = MAJOR(dev);
@@ -101,8 +107,16 @@ static int __init scull_init(void)
     }
     memset(scull_devices, 0, SCULL_NR_DEVS * sizeof(struct scull_dev));
 
-    for(i = 0; i < SCULL_NR_DEVS; i++)
-        scull_setup_cdev(&scull_devices[i], i);
+    for(i = 0; i < SCULL_NR_DEVS; i++){
+        result = scull_setup_cdev(&scull_devices[i], i);
+        if(result){
+            for(; i >= 0; i--)
+                cdev_del(&scull_devices[i].cdev);
+            kfree(scull_devices);
+            unregister_chrdev_region(dev, SCULL_NR_DEVS);
+            return result;
+        }
+    }
     printk(KERN_INFO "scull: loaded, major=%d\n", scull_major);
     return 0;
 }

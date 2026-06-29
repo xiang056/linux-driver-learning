@@ -12,14 +12,15 @@
 
 - **階段**：第二階段 — Character Device Driver 深化
 - **實際時間**：第 2 週（計劃進度 W9-10，進行中）
-- **進度**：scull file_operations 實作完成（open/read/write/release），待回家編譯驗證
+- **進度**：scull file_operations 實作完成 + code review 修正（錯誤處理、overflow、ENOSPC），待回家編譯驗證
 - **完成度**：約 30%（hello + hello_param + simple_gpio + ioctl + scull file_ops）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事
 1. 回家編譯 scull，測試 `/dev/scull0` 讀寫功能
-2. 實作 `lseek`
-3. 之後往 Ch05（concurrency / semaphore）
+2. 加入 mutex 保護並發讀寫（`mutex_init` / `mutex_lock` / `mutex_unlock`）
+3. 實作 `lseek`
+4. 讀 Ch05（concurrency / semaphore），驗證 mutex 寫法是否正確
 
 ---
 
