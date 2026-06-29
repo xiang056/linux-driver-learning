@@ -8,11 +8,11 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-06-29
+> 最後更新：2026-06-28
 
 - **階段**：第二階段 — Character Device Driver 深化
 - **實際時間**：第 2 週（計劃進度 W9-10，進行中）
-- **進度**：scull file_operations 實作完成 + code review 修正（錯誤處理、overflow、ENOSPC），待回家編譯驗證
+- **進度**：scull file_operations 實測通過（echo/cat 讀寫正確）
 - **完成度**：約 30%（hello + hello_param + simple_gpio + ioctl + scull file_ops）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
@@ -52,7 +52,7 @@
 | hello | `~/linux-dev/hello_module/` | 最小 kernel module | ✅ 已編譯 hello.ko |
 | hello_param | `~/linux-dev/hello_param/` | 帶 module_param 的 module | ✅ 已 insmod 實測（int/charp/array + sysfs 0644） |
 | simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化）+ ioctl 擴展 | ✅ 已實測（read/write/ioctl 5 命令全通過） |
-| scull | `~/linux-dev/scull/` | LDD3 官方 scull + ioctl/lseek 擴展 | 🟡 骨架完成（init/exit/kmalloc），file_operations 待實作 |
+| scull | `~/linux-dev/scull/` | LDD3 官方 scull + ioctl/lseek 擴展 | 🟡 file_operations 實測通過（open/read/write/release），mutex/lseek 待實作 |
 | timer | （待建） | 定時器驅動 | ⬜ |
 | platform uart | （待建） | platform_driver + device tree | ⬜ |
 | gpio_sysfs | （待建） | QEMU GPIO + sysfs 接口 | ⬜ |
