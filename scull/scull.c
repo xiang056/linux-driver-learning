@@ -13,6 +13,31 @@ static int scull_minor = 0;
 
 static struct scull_dev *scull_devices;
 
+static loff_t scull_llseek(struct file *filp, loff_t offset, int whence)
+{
+    struct scull_dev *dev = filp->private_data;
+    loff_t newpos;
+
+    switch(whence){
+        case SEEK_SET:
+            newpos = offset;
+            break;
+        case SEEK_CUR:
+            newpos = filp->f_pos + offset;
+            break;
+        case SEEK_END:
+            newpos = dev->size + offset;
+            break;
+        default:
+            return -EINVAL;
+    }
+    
+    if(newpos < 0)
+        return -EINVAL;
+    filp->f_pos = newpos;
+    return newpos;
+}
+
 static int scull_open(struct inode *inode, struct file *filp)
 {
     struct scull_dev *dev = container_of(inode->i_cdev, struct scull_dev, cdev);
@@ -81,6 +106,7 @@ static ssize_t scull_write(struct file *filp, const char __user *buf, size_t cou
 
 static struct file_operations scull_fops = {
     .owner = THIS_MODULE,
+    .llseek = scull_llseek,
     .open = scull_open,
     .release = scull_release,
     .read = scull_read,

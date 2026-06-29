@@ -8,17 +8,17 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-06-28 (晚)
+> 最後更新：2026-06-28 (夜)
 
 - **階段**：第二階段 — Character Device Driver 深化
 - **實際時間**：第 2 週（計劃進度 W9-10，進行中）
-- **進度**：scull file_operations + mutex 實測通過
-- **完成度**：約 30%（hello + hello_param + simple_gpio + ioctl + scull file_ops）
+- **進度**：scull file_operations + mutex + lseek 全部實測通過，scull 完成
+- **完成度**：約 35%（hello + hello_param + simple_gpio + ioctl + scull 完整版）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事
-1. 實作 `lseek`
-2. 讀 Ch05（concurrency / semaphore），驗證 mutex 寫法是否正確
+1. 讀 LDD3 Ch05（concurrency / semaphore），驗證 mutex 寫法
+2. 開始 Platform Driver（LDD3 Ch14）
 
 ---
 
@@ -30,7 +30,7 @@
 | 一 | W3-4 | 內核源碼導航 + 驅動入門 | ✅ 完成 |
 | 一 | W5-6 | Character Device Driver | ✅ 完成（simple_gpio 實測通過） |
 | 一 | W7-8 | ioctl 擴展 + Ch4 Debugging | ✅ 完成（ioctl 5 個命令實測通過，Ch4 讀完） |
-| 二 | W9-10 | lseek + blocking I/O + scull 驅動 | 🟡 進行中（scull 骨架完成） |
+| 二 | W9-10 | lseek + blocking I/O + scull 驅動 | ✅ 完成（scull 含 mutex/lseek 全通過） |
 | 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | ⬜ |
 | 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | ⬜ |
 | 二 | W15-16 | Platform Driver + Device Tree | ⬜ |
@@ -50,7 +50,7 @@
 | hello | `~/linux-dev/hello_module/` | 最小 kernel module | ✅ 已編譯 hello.ko |
 | hello_param | `~/linux-dev/hello_param/` | 帶 module_param 的 module | ✅ 已 insmod 實測（int/charp/array + sysfs 0644） |
 | simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化）+ ioctl 擴展 | ✅ 已實測（read/write/ioctl 5 命令全通過） |
-| scull | `~/linux-dev/scull/` | LDD3 官方 scull + ioctl/lseek 擴展 | 🟡 file_operations + mutex 實測通過，lseek 待實作 |
+| scull | `~/linux-dev/scull/` | LDD3 官方 scull，含 mutex + lseek | ✅ 完整實測通過（read/write/mutex/lseek） |
 | timer | （待建） | 定時器驅動 | ⬜ |
 | platform uart | （待建） | platform_driver + device tree | ⬜ |
 | gpio_sysfs | （待建） | QEMU GPIO + sysfs 接口 | ⬜ |
