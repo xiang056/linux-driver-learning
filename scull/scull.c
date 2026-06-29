@@ -4,6 +4,7 @@
 #include <linux/cdev.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/mutex.h>
 #include "scull.h"
 
 
@@ -28,41 +29,54 @@ static int scull_release(struct inode *inode, struct file *filp)
 static ssize_t scull_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
     struct scull_dev *dev = filp->private_data;
-    if( *f_pos >= dev->size)
-        return 0;
-    if(count > dev->size - *f_pos)
-        count = dev->size - *f_pos;
-    if(copy_to_user(buf, dev->data + *f_pos, count))
-        return -EFAULT;
-    *f_pos += count;
-    return count;
 
+    mutex_lock(&dev->lock);
+    if (*f_pos >= dev->size) {
+        mutex_unlock(&dev->lock);
+        return 0;
+    }
+    if (count > dev->size - *f_pos)
+        count = dev->size - *f_pos;
+    if (copy_to_user(buf, dev->data + *f_pos, count)) {
+        mutex_unlock(&dev->lock);
+        return -EFAULT;
+    }
+    *f_pos += count;
+    mutex_unlock(&dev->lock);
+    return count;
 }
 
 static ssize_t scull_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
 {
     struct scull_dev *dev = filp->private_data;
-    if(dev->data == NULL)
+
+    mutex_lock(&dev->lock);
+    if (dev->data == NULL)
         dev->data = kmalloc(SCULL_BUFFER_SIZE, GFP_KERNEL);
-    if(!dev->data)
+    if (!dev->data) {
+        mutex_unlock(&dev->lock);
         return -ENOMEM;
-    if (*f_pos >= SCULL_BUFFER_SIZE)
-        return -ENOSPC;
-    
-    if(*f_pos + count > SCULL_BUFFER_SIZE){
-        count = SCULL_BUFFER_SIZE - *f_pos;
-        if (count == 0)
-             return -ENOSPC;
     }
-
-
-    if(copy_from_user(dev->data + *f_pos, buf, count))
+    if (*f_pos >= SCULL_BUFFER_SIZE) {
+        mutex_unlock(&dev->lock);
+        return -ENOSPC;
+    }
+    if (*f_pos + count > SCULL_BUFFER_SIZE) {
+        count = SCULL_BUFFER_SIZE - *f_pos;
+        if (count == 0) {
+            mutex_unlock(&dev->lock);
+            return -ENOSPC;
+        }
+    }
+    if (copy_from_user(dev->data + *f_pos, buf, count)) {
+        mutex_unlock(&dev->lock);
         return -EFAULT;
-
+    }
     *f_pos += count;
-    if(*f_pos > dev->size)
+    if (*f_pos > dev->size)
         dev->size = *f_pos;
-    return count;   
+    mutex_unlock(&dev->lock);
+    return count;
 }
 
 static struct file_operations scull_fops = {
@@ -108,6 +122,7 @@ static int __init scull_init(void)
     memset(scull_devices, 0, SCULL_NR_DEVS * sizeof(struct scull_dev));
 
     for(i = 0; i < SCULL_NR_DEVS; i++){
+        mutex_init(&scull_devices[i].lock); // 初始化互斥鎖
         result = scull_setup_cdev(&scull_devices[i], i);
         if(result){
             for(; i >= 0; i--)

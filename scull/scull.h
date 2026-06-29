@@ -7,6 +7,7 @@ struct scull_dev {
     char *data;     /* 資料緩衝區 */
     size_t size;    /* 資料大小 */
     struct cdev cdev; /* kernel 字元裝置結構 */
+    struct mutex lock; /* 用於同步訪問的互斥鎖 */
 };
 
 #define SCULL_MAJOR 0   /* 預設主裝置號碼 */
