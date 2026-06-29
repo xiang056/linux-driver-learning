@@ -89,6 +89,12 @@
     - 不能直接 memcpy：user space 虛擬位址在 kernel mode 可能無效、記憶體可能被 swap、惡意位址安全漏洞
   - **`cat` 停止的原理**：`read()` 回傳 0 = EOF，`cat` 才會停止；不回傳 0 會無限讀下去
 
+### Week 5-6
+- **2026-06-25** 實測 `simple_gpio.ko` 完整通過
+  - **`mknod` 手動建立裝置節點**：`sudo mknod /dev/simple_gpio c <major> 0`；major 號從 `dmesg` 看（本次 240）
+  - **寫入需要 root**：`echo "x" > /dev/simple_gpio` 會 Permission denied，要用 `echo "x" | sudo tee /dev/simple_gpio`
+  - **踩坑：`simple_gpio` Makefile 的 KDIR 指向 `/lib/modules/.../build`**，該連結不存在；改成指向 `~/linux-dev/my_module/WSL2-Linux-Kernel-linux-msft-wsl-6.6.114.1` 才能編譯（與 `my_module` 相同路徑）
+
 ### Week 7
 - **2026-06-26** 閱讀 LDD3 Ch4（Debugging Techniques）
   - **Ch4 定位**：工具層，不是底層知識。Ch3 driver 出問題時才真的用得到，現階段讀過知道有這些工具即可，遇到問題再回來查
@@ -128,12 +134,6 @@
   - 固定實測流程：`make` → `insmod` → `dmesg` 拿 major → `mknod` → `gcc gpio_test` → `./gpio_test` → `dmesg` 確認 → `rmmod` + `rm /dev/`
   - dmesg 確認每個 ioctl 命令都有對應 kernel log（ON/OFF/TOGGLE/SET/GET）
   - `[read] (empty)` 原因：ioctl 改變狀態後沒有更新字串緩衝區，功能正確但可改進
-
-### Week 5-6
-- **2026-06-25** 實測 `simple_gpio.ko` 完整通過
-  - **`mknod` 手動建立裝置節點**：`sudo mknod /dev/simple_gpio c <major> 0`；major 號從 `dmesg` 看（本次 240）
-  - **寫入需要 root**：`echo "x" > /dev/simple_gpio` 會 Permission denied，要用 `echo "x" | sudo tee /dev/simple_gpio`
-  - **踩坑：`simple_gpio` Makefile 的 KDIR 指向 `/lib/modules/.../build`**，該連結不存在；改成指向 `~/linux-dev/my_module/WSL2-Linux-Kernel-linux-msft-wsl-6.6.114.1` 才能編譯（與 `my_module` 相同路徑）
 
 <!-- 之後每週往下加，格式：日期 + 學到的關鍵點 / 踩到的坑 -->
 

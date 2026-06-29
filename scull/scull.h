@@ -11,6 +11,6 @@ struct scull_dev {
 
 #define SCULL_MAJOR 0   /* 預設主裝置號碼 */
 #define SCULL_NR_DEVS 4   /* 預設裝置數量 */
-#define SCULL_UBFFER_SIZE 4096 /* 預設緩衝區大小 */
+#define SCULL_BUFFER_SIZE 4096 /* 預設緩衝區大小 */
 
 #endif /* SCULL_H */
