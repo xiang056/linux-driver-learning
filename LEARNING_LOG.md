@@ -8,18 +8,18 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-06-28
+> 最後更新：2026-06-29
 
-- **階段**：第一階段 — Linux 基礎 + 環境建置
-- **實際時間**：第 2 週（計劃進度 W7-8，超前完成）
-- **進度**：scull 驅動骨架完成（init/exit/kmalloc/mknod）
-- **完成度**：約 25%（hello + hello_param + simple_gpio + ioctl 全部實測通過）
+- **階段**：第二階段 — Character Device Driver 深化
+- **實際時間**：第 2 週（計劃進度 W9-10，進行中）
+- **進度**：scull file_operations 實作完成（open/read/write/release），待回家編譯驗證
+- **完成度**：約 30%（hello + hello_param + simple_gpio + ioctl + scull file_ops）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事
-1. 實作 `scull` 的 `file_operations`（open / read / write / release）
-2. 測試 `/dev/scull0` 讀寫功能
-3. 之後加 `lseek` / `ioctl` 擴展
+1. 回家編譯 scull，測試 `/dev/scull0` 讀寫功能
+2. 實作 `lseek`
+3. 之後往 Ch05（concurrency / semaphore）
 
 ---
 
@@ -107,6 +107,17 @@
   - **System hang**：在迴圈裡插 `schedule()` 讓其他 process 搶 CPU；Magic SysRq 緊急救援
   - **gdb**：`gdb vmlinux /proc/kcore` 可看 kernel 變數，但不能設 breakpoint 也不能改資料
   - **心得**：Ch4 在沒遇過 bug 的時候讀很抽象，等實測出問題再回來看會快很多
+
+### Week 9
+- **2026-06-29** 實作 `scull` 的 `file_operations`（open / read / write / release）
+  - **`scull_open`**：用 `container_of(inode->i_cdev, struct scull_dev, cdev)` 從 kernel 給的 `cdev` 反推出整個 `scull_dev`，存進 `filp->private_data` 供後續函式使用
+  - **`container_of` 原理**：kernel 只給你結構體內某個欄位的地址，`container_of` 用欄位的偏移量往前算，找出整個結構體的起始地址
+  - **`private_data` 的用途**：`open`/`read`/`write`/`release` 是四個分開的函式，`filp->private_data` 是它們之間共享資料的橋樑
+  - **`scull_read`**：三步驟 — ① `*f_pos >= dev->size` 回傳 0（EOF）② 截斷超出範圍的 count ③ `copy_to_user` 複製資料，失敗回傳 `-EFAULT`
+  - **`scull_write`**：lazy allocation — 第一次寫入才 `kmalloc`，`copy_from_user` 後更新 `dev->size`
+  - **指標重點**：`f_pos` 用指標傳入是因為 C 是值傳遞，要讓函式真的改到游標位置，必須傳地址（`*f_pos += count` 才能讓外面的值更新）
+  - **`scull_setup_cdev`**：`cdev_init` 綁定 fops → `cdev_add` 註冊裝置，失敗印 WARNING
+  - **修正 typo**：`scull.h` 的 `SCULL_UBFFER_SIZE` → `SCULL_BUFFER_SIZE`
 
 ### Week 8
 - **2026-06-28** 建立 `scull` 驅動骨架（LDD3 Ch3 標準範例）
