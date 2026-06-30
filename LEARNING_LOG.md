@@ -8,17 +8,18 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-06-28 (夜)
+> 最後更新：2026-06-30
 
 - **階段**：第二階段 — Character Device Driver 深化
 - **實際時間**：第 2 週（計劃進度 W9-10，進行中）
-- **進度**：scull file_operations + mutex + lseek 全部實測通過，scull 完成
+- **進度**：scull 完成（含 mutex/lseek）；LDD3 Ch05 讀完；Platform Driver 骨架建立中
 - **完成度**：約 35%（hello + hello_param + simple_gpio + ioctl + scull 完整版）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事
-1. 讀 LDD3 Ch05（concurrency / semaphore），驗證 mutex 寫法
-2. 開始 Platform Driver（LDD3 Ch14）
+
+1. 完成 Platform Driver 骨架（platform_demo）：寫完 4 個檔案 → WSL2 編譯 → insmod 測試
+2. 之後：加入 probe 取資源、ioremap、實際讀寫暫存器
 
 ---
 
@@ -31,7 +32,7 @@
 | 一 | W5-6 | Character Device Driver | ✅ 完成（simple_gpio 實測通過） |
 | 一 | W7-8 | ioctl 擴展 + Ch4 Debugging | ✅ 完成（ioctl 5 個命令實測通過，Ch4 讀完） |
 | 二 | W9-10 | lseek + blocking I/O + scull 驅動 | ✅ 完成（scull 含 mutex/lseek 全通過） |
-| 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | ⬜ |
+| 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | 🟡 Ch05 讀完，Platform Driver 進行中 |
 | 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | ⬜ |
 | 二 | W15-16 | Platform Driver + Device Tree | ⬜ |
 | 三 | W17-18 | QEMU ARM + Buildroot | ⬜ |
@@ -107,17 +108,6 @@
   - **gdb**：`gdb vmlinux /proc/kcore` 可看 kernel 變數，但不能設 breakpoint 也不能改資料
   - **心得**：Ch4 在沒遇過 bug 的時候讀很抽象，等實測出問題再回來看會快很多
 
-### Week 9
-- **2026-06-29** 實作 `scull` 的 `file_operations`（open / read / write / release）
-  - **`scull_open`**：用 `container_of(inode->i_cdev, struct scull_dev, cdev)` 從 kernel 給的 `cdev` 反推出整個 `scull_dev`，存進 `filp->private_data` 供後續函式使用
-  - **`container_of` 原理**：kernel 只給你結構體內某個欄位的地址，`container_of` 用欄位的偏移量往前算，找出整個結構體的起始地址
-  - **`private_data` 的用途**：`open`/`read`/`write`/`release` 是四個分開的函式，`filp->private_data` 是它們之間共享資料的橋樑
-  - **`scull_read`**：三步驟 — ① `*f_pos >= dev->size` 回傳 0（EOF）② 截斷超出範圍的 count ③ `copy_to_user` 複製資料，失敗回傳 `-EFAULT`
-  - **`scull_write`**：lazy allocation — 第一次寫入才 `kmalloc`，`copy_from_user` 後更新 `dev->size`
-  - **指標重點**：`f_pos` 用指標傳入是因為 C 是值傳遞，要讓函式真的改到游標位置，必須傳地址（`*f_pos += count` 才能讓外面的值更新）
-  - **`scull_setup_cdev`**：`cdev_init` 綁定 fops → `cdev_add` 註冊裝置，失敗印 WARNING
-  - **修正 typo**：`scull.h` 的 `SCULL_UBFFER_SIZE` → `SCULL_BUFFER_SIZE`
-
 ### Week 8
 - **2026-06-28** 建立 `scull` 驅動骨架（LDD3 Ch3 標準範例）
   - **scull 是什麼**：Simple Character Utility for Loading Localities，用 kernel 記憶體模擬字元裝置，沒有真實硬體。write 存進 kmalloc buffer，read 從 buffer 讀回，像住在 kernel 裡的記事本
@@ -128,6 +118,37 @@
     - `scull_exit`：逐一 `kfree` 各裝置 data → `kfree` 裝置陣列 → `unregister_chrdev_region`
   - **實測結果**：編譯成功，insmod 取得 major=240，mknod 建立 `/dev/scull0~3`；cat/echo 回傳 "No such device or address"（正常，因為 `file_operations` 尚未實作）
   - **下一步**：實作 `open` / `read` / `write` / `release` callback，讓 `/dev/scull0` 真正能讀寫
+
+### Week 9
+
+- **2026-06-30** 開始 Platform Driver（LDD3 Ch14）
+  - **Platform Driver 定位**：驅動焊死在 SoC 上的硬體（UART/GPIO/I2C），硬體無法自動偵測，需透過 Device Tree 描述
+  - **Device Tree**：硬體清單，描述裝置位址/中斷/compatible 字串；kernel 啟動時解析，建立 platform_device
+  - **compatible 配對**：DTS 的 `compatible` 字串 vs driver 的 `of_device_id` 表，完全一樣才配對成功，kernel 呼叫 `probe()`
+  - **probe vs init**：`probe` 是 kernel 配對成功後才呼叫（每個裝置各一次），`pdev` 帶有 DTS 資源；`init` 是 insmod 直接跑，無硬體資訊
+  - **取資源流程**：`platform_get_resource()` 取實體位址 → `devm_ioremap_resource()` 映射成虛擬位址 → 才能讀寫暫存器
+  - **為何需要 ioremap**：Linux 有 MMU，kernel 跑在虛擬位址空間，不能直接用實體位址（不同於 STM32 直接操作實體位址）
+  - **devm_ 系列**：managed API，`remove` 時 kernel 自動釋放，不需要手動清理
+  - **建立 platform_demo 骨架**：4 個檔案（platform_demo.h / platform_demo.c / platform_device_demo.c / Makefile），device 和 driver 分兩個 .ko，手動模擬 DTS 配對
+
+- **2026-06-30** 深入理解 scull 指標機制（透過考題練習）
+  - **`filp->private_data` 橋接機制**：`open` 用 `container_of` 找到正確的 `scull_dev`，把位址存進 `filp->private_data`；`read`/`write` 直接從 `filp` 取回，不需要重新搜尋。4 個裝置各自有 `filp`，靠這個機制區分操作的是哪一個
+  - **`container_of` 數學**：`scull_dev 起點 = i_cdev 位址 - cdev 的 offset`；offset 算法 = 前面所有欄位大小相加（data:8 + size:8 + lock:40 = 56，所以 cdev offset = 56）
+  - **`dev->data` 兩層指標**：`dev->data` 欄位本身住在結構起點（offset 0），裡面存的是 `kmalloc` 回傳的位址；實際資料在那個位址，不在結構裡
+  - **`copy_to_user` 來源位址**：`dev->data + *f_pos`，是用 `dev->data` 裡存的值（kmalloc 位址）加偏移，不是 `dev->data` 欄位本身的位址加偏移
+  - **完整 write 流程**：`open` → `container_of` 找裝置 → `filp->private_data = dev` → `write` 取回 `dev` → `kmalloc`（第一次）→ `copy_from_user` → 更新 `dev->size`
+  - **LDD3 Ch05 重點整理**：spinlock vs mutex（spinlock 忙等不能睡，mutex 可以睡）；scull 用 mutex；競態條件範例（兩個 process 同時過 `if (!dev->data)` → 記憶體洩漏）；現代 API：`mutex_init` / `mutex_lock` / `mutex_unlock`（書上舊版是 `down_interruptible` / `up`）
+
+- **2026-06-29** 實作 `scull` 的 `file_operations`（open / read / write / release）
+  - **`scull_open`**：用 `container_of(inode->i_cdev, struct scull_dev, cdev)` 從 kernel 給的 `cdev` 反推出整個 `scull_dev`，存進 `filp->private_data` 供後續函式使用
+  - **`container_of` 原理**：kernel 只給你結構體內某個欄位的地址，`container_of` 用欄位的偏移量往前算，找出整個結構體的起始地址
+  - **`private_data` 的用途**：`open`/`read`/`write`/`release` 是四個分開的函式，`filp->private_data` 是它們之間共享資料的橋樑
+  - **`scull_read`**：三步驟 — ① `*f_pos >= dev->size` 回傳 0（EOF）② 截斷超出範圍的 count ③ `copy_to_user` 複製資料，失敗回傳 `-EFAULT`
+  - **`scull_write`**：lazy allocation — 第一次寫入才 `kmalloc`，`copy_from_user` 後更新 `dev->size`
+  - **指標重點**：`f_pos` 用指標傳入是因為 C 是值傳遞，要讓函式真的改到游標位置，必須傳地址（`*f_pos += count` 才能讓外面的值更新）
+  - **`scull_setup_cdev`**：`cdev_init` 綁定 fops → `cdev_add` 註冊裝置，失敗印 WARNING
+  - **修正 typo**：`scull.h` 的 `SCULL_UBFFER_SIZE` → `SCULL_BUFFER_SIZE`
+
 - **2026-06-26** 實作 `simple_gpio` ioctl 擴展
   - **ioctl 命令定義巨集**：
     - `_IO(magic, nr)` — 不傳資料（例如 ON/OFF/TOGGLE）
