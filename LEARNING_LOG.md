@@ -12,14 +12,14 @@
 
 - **階段**：第二階段 — Character Device Driver 深化
 - **實際時間**：第 2 週（計劃進度 W9-10，進行中）
-- **進度**：scull 完成（含 mutex/lseek）；LDD3 Ch05 讀完；Platform Driver 骨架建立中
-- **完成度**：約 35%（hello + hello_param + simple_gpio + ioctl + scull 完整版）
+- **進度**：scull 完成（含 mutex/lseek）；LDD3 Ch05 讀完；Platform Driver 骨架完成並實測通過
+- **完成度**：約 40%（hello + hello_param + simple_gpio + ioctl + scull + platform_demo）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事
 
-1. 完成 Platform Driver 骨架（platform_demo）：寫完 4 個檔案 → WSL2 編譯 → insmod 測試
-2. 之後：加入 probe 取資源、ioremap、實際讀寫暫存器
+1. platform_demo 加入資源取用：`platform_get_resource` + `devm_ioremap_resource`
+2. 加入中斷申請：`platform_get_irq` + `devm_request_irq`
 
 ---
 
@@ -32,7 +32,7 @@
 | 一 | W5-6 | Character Device Driver | ✅ 完成（simple_gpio 實測通過） |
 | 一 | W7-8 | ioctl 擴展 + Ch4 Debugging | ✅ 完成（ioctl 5 個命令實測通過，Ch4 讀完） |
 | 二 | W9-10 | lseek + blocking I/O + scull 驅動 | ✅ 完成（scull 含 mutex/lseek 全通過） |
-| 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | 🟡 Ch05 讀完，Platform Driver 進行中 |
+| 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | 🟡 Ch05 讀完，platform_demo 骨架完成 |
 | 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | ⬜ |
 | 二 | W15-16 | Platform Driver + Device Tree | ⬜ |
 | 三 | W17-18 | QEMU ARM + Buildroot | ⬜ |
@@ -53,6 +53,7 @@
 | simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化）+ ioctl 擴展 | ✅ 已實測（read/write/ioctl 5 命令全通過） |
 | scull | `~/linux-dev/scull/` | LDD3 官方 scull，含 mutex + lseek | ✅ 完整實測通過（read/write/mutex/lseek） |
 | timer | （待建） | 定時器驅動 | ⬜ |
+| platform_demo | `~/linux-dev/platform_demo/` | platform_driver + platform_device 配對骨架 | ✅ probe/remove 實測通過 |
 | platform uart | （待建） | platform_driver + device tree | ⬜ |
 | gpio_sysfs | （待建） | QEMU GPIO + sysfs 接口 | ⬜ |
 | uart_char | （待建） | 字符設備版 UART 驅動 | ⬜ |
@@ -121,7 +122,7 @@
 
 ### Week 9
 
-- **2026-06-30** 開始 Platform Driver（LDD3 Ch14）
+- **2026-06-30** 完成 Platform Driver 骨架實測（platform_demo）
   - **Platform Driver 定位**：驅動焊死在 SoC 上的硬體（UART/GPIO/I2C），硬體無法自動偵測，需透過 Device Tree 描述
   - **Device Tree**：硬體清單，描述裝置位址/中斷/compatible 字串；kernel 啟動時解析，建立 platform_device
   - **compatible 配對**：DTS 的 `compatible` 字串 vs driver 的 `of_device_id` 表，完全一樣才配對成功，kernel 呼叫 `probe()`
@@ -179,6 +180,7 @@
 | 2026-06-11 | `insmod` 預期會報 version magic 不匹配 | 本地重編的 vermagic 結尾多一個 `+`（git 樹 + `CONFIG_LOCALVERSION_AUTO` off 時 `scm_version --short` 會加），運行內核沒有 `+` | build 時設 `LOCALVERSION=`（空但已設定），跳過 setlocalversion 加 `+` 的分支；重生 `kernel.release`/`utsrelease.h` 後重編模組 |
 | 2026-06-25 | `simple_gpio` make 報 `/lib/modules/.../build: No such file` | Makefile KDIR 指向系統 build 符號連結，WSL2 沒有對應 headers | 改 KDIR 指向已完整編譯的 kernel source：`~/linux-dev/my_module/WSL2-Linux-Kernel-linux-msft-wsl-6.6.114.1` |
 | 2026-06-25 | `echo "gpio_on" > /dev/simple_gpio` 報 Permission denied | shell 重導向由目前 user 執行，不繼承 sudo 權限 | 改用 `echo "gpio_on" \| sudo tee /dev/simple_gpio` |
+| 2026-06-30 | `rmmod platform_device_demo` 觸發 kernel oops | 靜態定義的 `platform_device` 沒有提供 `.dev.release`，卸載時 kernel 不知道如何釋放裝置 | 在 `platform_device` 加上 `.dev = { .release = demo_device_release }` |
 
 > 註：源碼樹原本屬 root，編譯前先 `sudo chown -R $USER /usr/src/wsl2-headers-$(uname -r)`，之後編模組就不用 sudo（只有 insmod/rmmod 需要 root）。
 
