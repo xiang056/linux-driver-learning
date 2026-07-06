@@ -8,18 +8,18 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-06-30
+> 最後更新：2026-07-06
 
 - **階段**：第二階段 — Character Device Driver 深化
 - **實際時間**：第 2 週（計劃進度 W9-10，進行中）
-- **進度**：scull 完成（含 mutex/lseek）；LDD3 Ch05 讀完；Platform Driver 骨架完成並實測通過
-- **完成度**：約 40%（hello + hello_param + simple_gpio + ioctl + scull + platform_demo）
+- **進度**：scull 完成；platform_demo 完成（骨架 + platform_get_resource 實測通過）
+- **完成度**：約 42%（hello + hello_param + simple_gpio + ioctl + scull + platform_demo）
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事
 
-1. platform_demo 加入資源取用：`platform_get_resource` + `devm_ioremap_resource`
-2. 加入中斷申請：`platform_get_irq` + `devm_request_irq`
+1. platform_demo 加入中斷申請：`platform_get_irq` + `devm_request_irq`
+2. 之後：QEMU ARM 環境建立，在真實 ARM 上跑 ioremap
 
 ---
 
@@ -32,7 +32,7 @@
 | 一 | W5-6 | Character Device Driver | ✅ 完成（simple_gpio 實測通過） |
 | 一 | W7-8 | ioctl 擴展 + Ch4 Debugging | ✅ 完成（ioctl 5 個命令實測通過，Ch4 讀完） |
 | 二 | W9-10 | lseek + blocking I/O + scull 驅動 | ✅ 完成（scull 含 mutex/lseek 全通過） |
-| 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | 🟡 Ch05 讀完，platform_demo 骨架完成 |
+| 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | 🟡 Ch05 讀完，platform_demo 資源取用完成 |
 | 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | ⬜ |
 | 二 | W15-16 | Platform Driver + Device Tree | ⬜ |
 | 三 | W17-18 | QEMU ARM + Buildroot | ⬜ |
@@ -121,6 +121,12 @@
   - **下一步**：實作 `open` / `read` / `write` / `release` callback，讓 `/dev/scull0` 真正能讀寫
 
 ### Week 9
+
+- **2026-07-06** 完成 platform_demo 資源取用（`platform_get_resource`）
+  - **`platform_get_resource(pdev, IORESOURCE_MEM, 0)`**：從 platform_device 取出第 0 個 MEM 資源，回傳 `struct resource *`（含 start/end/flags）
+  - **`devm_ioremap_resource` vs `devm_ioremap`**：前者會先 `request_mem_region` 搶佔位址再映射；後者直接映射不搶佔。WSL2 x86 上 0x10000000 是 RAM 區域，`request_mem_region` 失敗 → 改用 `devm_ioremap` 也失敗（RAM 不能 ioremap）
+  - **WSL2 限制**：ioremap 只對 MMIO（外設暫存器）位址有效，不能對 RAM 位址使用。真實 ARM SoC 上 peripheral 位址（如 0x3F200000）才是正確目標，QEMU 上再實作
+  - **resource_size(res)**：計算資源大小 = `res->end - res->start + 1`，比手動算安全
 
 - **2026-06-30** 完成 Platform Driver 骨架實測（platform_demo）
   - **Platform Driver 定位**：驅動焊死在 SoC 上的硬體（UART/GPIO/I2C），硬體無法自動偵測，需透過 Device Tree 描述

@@ -7,17 +7,19 @@
 
 static int demo_probe(struct platform_device *pdev)
 {
-	struct resource *res;
-	void __iomem *base;
+    struct resource *res;
 
-	res		= platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	base	= devm_ioremap_resource(&pdev->dev, res);
-	if(IS_ERR(base))
-		return PTR_ERR(base);
+    res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+    if (!res) {
+        dev_err(&pdev->dev, "no memory resource\n");
+        return -ENODEV;
+    }
 
-	dev_info(&pdev->dev, "probe: base=%p\n", base);
-	return 0;
+    dev_info(&pdev->dev, "probe: mem start=0x%llx size=0x%llx\n",
+             (u64)res->start, (u64)resource_size(res));
+    return 0;
 }
+
 
 static int demo_remove(struct platform_device *pdev)
 {
