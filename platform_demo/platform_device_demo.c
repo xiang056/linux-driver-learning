@@ -13,6 +13,11 @@ static struct resource demo_resources[] = {
 		.end   = DEMO_MEM_START + DEMO_MEM_SIZE - 1,	//0x10000fff
 		.flags = IORESOURCE_MEM,	//記憶體資源
 	},
+	[1] = {
+		.start	= DEMO_IRQ,
+		.end	= DEMO_IRQ,
+		.flags	= IORESOURCE_IRQ,
+	},
 };
 static struct platform_device demo_device = {
 	.name = "platform-demo",
