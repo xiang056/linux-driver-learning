@@ -13,12 +13,18 @@ static irqreturn_t demo_irq_handler(int irq, void *dev_id)
 static int demo_probe(struct platform_device *pdev)
 {
     struct resource *res;
+    struct demo_data *data;
     int irq;
     int ret;
+
+    data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
+
     irq = platform_get_irq(pdev, 0);
     if(irq <0) {
         return irq;
     }
+    data->irq = irq;
+    dev_set_drvdata(&pdev->dev, data);    
     ret = devm_request_irq(&pdev->dev, irq, demo_irq_handler, 0, "platform-demo", NULL);
     if(ret)
         return ret;
@@ -36,7 +42,9 @@ static int demo_probe(struct platform_device *pdev)
 
 static int demo_remove(struct platform_device *pdev)
 {
-	dev_info(&pdev->dev, "remove: bye\n");
+	struct demo_data *data = dev_get_drvdata(&pdev->dev);
+    dev_info(&pdev->dev, "remove: irq was %d\n", data->irq);
+    dev_info(&pdev->dev, "remove: bye\n");
 	return 0;
 }
 

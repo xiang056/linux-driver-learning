@@ -8,18 +8,29 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-06
+> 最後更新：2026-07-13
 
 - **階段**：第二階段 — Character Device Driver 深化
-- **實際時間**：第 2 週（計劃進度 W9-10，進行中）
-- **進度**：scull 完成；platform_demo 完成（骨架 + platform_get_resource 實測通過）
-- **完成度**：約 42%（hello + hello_param + simple_gpio + ioctl + scull + platform_demo）
+- **實際時間**：第 2 週（計劃進度 W11-12，進行中）
+- **進度**：platform_demo 完成（骨架 + 資源取用 + 中斷申請 + dev_set/get_drvdata），尚未在 WSL2 實測
+- **完成度**：約 43%
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
-### ▶️ 下一步要做的事
+### ▶️ 下一步要做的事（回家照順序做）
 
-1. platform_demo 加入中斷申請：`platform_get_irq` + `devm_request_irq`
-2. 之後：QEMU ARM 環境建立，在真實 ARM 上跑 ioremap
+1. **WSL2 編譯測試 platform_demo**
+   ```bash
+   cd ~/linux-dev/platform_demo
+   make
+   sudo insmod platform_device_demo.ko
+   sudo insmod platform_demo.ko
+   dmesg | tail -10   # 確認看到 probe: mem start=0x10000000
+   sudo rmmod platform_demo
+   sudo rmmod platform_device_demo
+   dmesg | tail -5    # 確認看到 remove: irq was 13
+   ```
+2. 測試通過後：加入 `of_match_table`，讓 driver 支援真實 DTS
+3. 之後：QEMU ARM 環境建立
 
 ---
 

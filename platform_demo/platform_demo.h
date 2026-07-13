@@ -5,4 +5,8 @@
 #define DEMO_MEM_SIZE	0x1000
 #define DEMO_IRQ	13
 
+struct demo_data {
+    int irq;
+};
+
 #endif
