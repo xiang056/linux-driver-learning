@@ -1,7 +1,9 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/of.h>
 #include <linux/io.h>
 #include <linux/interrupt.h>
+#include <linux/of.h>
 #include "platform_demo.h"
 
 
