@@ -8,17 +8,23 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-13
+> 最後更新：2026-07-14
 
-- **階段**：第二階段 — Character Device Driver 深化
-- **實際時間**：第 2 週（計劃進度 W11-12，進行中）
-- **進度**：platform_demo 完成（骨架 + 資源取用 + 中斷申請 + dev_set/get_drvdata），尚未在 WSL2 實測
-- **完成度**：約 43%
+- **階段**：第二階段 — Platform Driver
+- **實際時間**：第 3 週（計劃進度 W11-12，進行中）
+- **進度**：platform_demo 完整版完成（骨架 + 資源取用 + 中斷申請 + drvdata + of_match_table），尚未在 WSL2 實測
+- **完成度**：約 45%
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事（回家照順序做）
 
-1. **WSL2 編譯測試 platform_demo**
+1. **先 push 最新 code 到 GitHub**
+   ```bash
+   git pull  # 先同步
+   # 把 Windows 上的 platform_demo/ 複製到 WSL2 ~/linux-dev/platform_demo/
+   ```
+
+2. **WSL2 編譯測試 platform_demo**
    ```bash
    cd ~/linux-dev/platform_demo
    make
@@ -29,8 +35,10 @@
    sudo rmmod platform_device_demo
    dmesg | tail -5    # 確認看到 remove: irq was 13
    ```
-2. 測試通過後：加入 `of_match_table`，讓 driver 支援真實 DTS
-3. 之後：QEMU ARM 環境建立
+
+3. **測試通過後更新 LEARNING_LOG，標記 platform_demo 完成**
+
+4. **下一個主題：LDD3 Ch06（blocking I/O）或 QEMU ARM 環境建立**
 
 ---
 

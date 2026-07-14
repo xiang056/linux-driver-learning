@@ -4,6 +4,12 @@
 #include <linux/interrupt.h>
 #include "platform_demo.h"
 
+
+static const struct of_device_id demo_of_match []= {
+    { .compatible = "myvendor,platform-demo" },
+    {}
+};
+
 static irqreturn_t demo_irq_handler(int irq, void *dev_id)
 {
     pr_info("platform-demo: irq %d fired\n", irq);
@@ -53,6 +59,7 @@ static struct platform_driver demo_driver = {
 	.remove	=  demo_remove,
 	.driver =  {
 		.name = "platform-demo",
+        .of_match_table = demo_of_match,
 	},
 }; 
 
@@ -62,3 +69,4 @@ module_platform_driver(demo_driver);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Edward");
 MODULE_DESCRIPTION("Minimal platform driver demo");
+MODULE_DEVICE_TABLE(of, demo_of_match);
