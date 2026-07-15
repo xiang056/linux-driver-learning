@@ -8,37 +8,18 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-14
+> 最後更新：2026-07-15
 
 - **階段**：第二階段 — Platform Driver
 - **實際時間**：第 3 週（計劃進度 W11-12，進行中）
-- **進度**：platform_demo 完整版完成（骨架 + 資源取用 + 中斷申請 + drvdata + of_match_table），尚未在 WSL2 實測
-- **完成度**：約 45%
+- **進度**：platform_demo 完整版完成並實測通過（骨架 + 資源取用 + 中斷申請 + drvdata + of_match_table）
+- **完成度**：約 47%
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
-### ▶️ 下一步要做的事（回家照順序做）
+### ▶️ 下一步要做的事
 
-1. **先 push 最新 code 到 GitHub**
-   ```bash
-   git pull  # 先同步
-   # 把 Windows 上的 platform_demo/ 複製到 WSL2 ~/linux-dev/platform_demo/
-   ```
-
-2. **WSL2 編譯測試 platform_demo**
-   ```bash
-   cd ~/linux-dev/platform_demo
-   make
-   sudo insmod platform_device_demo.ko
-   sudo insmod platform_demo.ko
-   dmesg | tail -10   # 確認看到 probe: mem start=0x10000000
-   sudo rmmod platform_demo
-   sudo rmmod platform_device_demo
-   dmesg | tail -5    # 確認看到 remove: irq was 13
-   ```
-
-3. **測試通過後更新 LEARNING_LOG，標記 platform_demo 完成**
-
-4. **下一個主題：LDD3 Ch06（blocking I/O）或 QEMU ARM 環境建立**
+1. LDD3 Ch06（blocking I/O）
+2. 之後：QEMU ARM 環境建立
 
 ---
 
@@ -51,7 +32,7 @@
 | 一 | W5-6 | Character Device Driver | ✅ 完成（simple_gpio 實測通過） |
 | 一 | W7-8 | ioctl 擴展 + Ch4 Debugging | ✅ 完成（ioctl 5 個命令實測通過，Ch4 讀完） |
 | 二 | W9-10 | lseek + blocking I/O + scull 驅動 | ✅ 完成（scull 含 mutex/lseek 全通過） |
-| 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | 🟡 Ch05 讀完，platform_demo 資源取用完成 |
+| 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | 🟡 Ch05 讀完，platform_demo 完整實測通過 |
 | 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | ⬜ |
 | 二 | W15-16 | Platform Driver + Device Tree | ⬜ |
 | 三 | W17-18 | QEMU ARM + Buildroot | ⬜ |
@@ -72,7 +53,7 @@
 | simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化）+ ioctl 擴展 | ✅ 已實測（read/write/ioctl 5 命令全通過） |
 | scull | `~/linux-dev/scull/` | LDD3 官方 scull，含 mutex + lseek | ✅ 完整實測通過（read/write/mutex/lseek） |
 | timer | （待建） | 定時器驅動 | ⬜ |
-| platform_demo | `~/linux-dev/platform_demo/` | platform_driver + platform_device 配對骨架 | ✅ probe/remove 實測通過 |
+| platform_demo | `~/linux-dev/platform_demo/` | platform_driver 完整版（資源取用 + 中斷 + drvdata + of_match_table）| ✅ 完整實測通過 |
 | platform uart | （待建） | platform_driver + device tree | ⬜ |
 | gpio_sysfs | （待建） | QEMU GPIO + sysfs 接口 | ⬜ |
 | uart_char | （待建） | 字符設備版 UART 驅動 | ⬜ |
