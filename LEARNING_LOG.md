@@ -8,18 +8,44 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-15
+> 最後更新：2026-07-17
 
-- **階段**：第二階段 — Platform Driver
-- **實際時間**：第 3 週（計劃進度 W11-12，進行中）
-- **進度**：platform_demo 完整版完成並實測通過（骨架 + 資源取用 + 中斷申請 + drvdata + of_match_table）
-- **完成度**：約 47%
+- **階段**：第二階段 — Blocking I/O（LDD3 Ch06）
+- **實際時間**：第 4 週（計劃進度 W11-12，進行中）
+- **進度**：blocking I/O 概念已學完，開始實作 blocking_io driver
+- **完成度**：約 49%
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
-### ▶️ 下一步要做的事
+### ▶️ 下一步要做的事（回家從這裡開始）
 
-1. LDD3 Ch06（blocking I/O）
-2. 之後：QEMU ARM 環境建立
+1. 建目錄：`mkdir ~/linux-driver-learning/blocking_io`
+2. 建 `blocking_io.h`，內容如下：
+
+```c
+#ifndef BLOCKING_IO_H
+#define BLOCKING_IO_H
+
+#include <linux/wait.h>
+#include <linux/mutex.h>
+
+#define BLOCKING_MAJOR  0
+#define BUF_SIZE        1024
+
+struct blocking_dev {
+    char buf[BUF_SIZE];   /* 資料緩衝區 */
+    int  data_len;        /* buf 目前有幾個 byte */
+    int  data_ready;      /* 旗標：0=無資料，1=有資料 */
+
+    wait_queue_head_t read_wq;  /* reader 睡在這裡 */
+    struct mutex lock;
+};
+
+#endif
+```
+
+3. 完成 `blocking_io.h` 後繼續問 Claude 進行 Step 3（實作 `blocking_io.c`）
+
+- 之後：QEMU ARM 環境建立
 
 ---
 
