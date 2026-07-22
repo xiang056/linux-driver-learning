@@ -8,44 +8,18 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-17
+> 最後更新：2026-07-22
 
 - **階段**：第二階段 — Blocking I/O（LDD3 Ch06）
 - **實際時間**：第 4 週（計劃進度 W11-12，進行中）
-- **進度**：blocking I/O 概念已學完，開始實作 blocking_io driver
-- **完成度**：約 49%
+- **進度**：blocking_io driver 完整實作並實測通過（read 睡眠等待 + write 喚醒）
+- **完成度**：約 52%
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
 
-### ▶️ 下一步要做的事（回家從這裡開始）
+### ▶️ 下一步要做的事
 
-1. 建目錄：`mkdir ~/linux-driver-learning/blocking_io`
-2. 建 `blocking_io.h`，內容如下：
-
-```c
-#ifndef BLOCKING_IO_H
-#define BLOCKING_IO_H
-
-#include <linux/wait.h>
-#include <linux/mutex.h>
-
-#define BLOCKING_MAJOR  0
-#define BUF_SIZE        1024
-
-struct blocking_dev {
-    char buf[BUF_SIZE];   /* 資料緩衝區 */
-    int  data_len;        /* buf 目前有幾個 byte */
-    int  data_ready;      /* 旗標：0=無資料，1=有資料 */
-
-    wait_queue_head_t read_wq;  /* reader 睡在這裡 */
-    struct mutex lock;
-};
-
-#endif
-```
-
-3. 完成 `blocking_io.h` 後繼續問 Claude 進行 Step 3（實作 `blocking_io.c`）
-
-- 之後：QEMU ARM 環境建立
+1. LDD3 Ch07-9（時間管理 / 記憶體 / DMA）或直接跳 QEMU ARM 環境建立
+2. QEMU ARM 環境建立後，回頭把 platform_demo 的 `devm_ioremap` 在真實 MMIO 位址上驗證
 
 ---
 
@@ -58,7 +32,7 @@ struct blocking_dev {
 | 一 | W5-6 | Character Device Driver | ✅ 完成（simple_gpio 實測通過） |
 | 一 | W7-8 | ioctl 擴展 + Ch4 Debugging | ✅ 完成（ioctl 5 個命令實測通過，Ch4 讀完） |
 | 二 | W9-10 | lseek + blocking I/O + scull 驅動 | ✅ 完成（scull 含 mutex/lseek 全通過） |
-| 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | 🟡 Ch05 讀完，platform_demo 完整實測通過 |
+| 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | ✅ 完成（platform_demo + blocking_io 全通過） |
 | 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | ⬜ |
 | 二 | W15-16 | Platform Driver + Device Tree | ⬜ |
 | 三 | W17-18 | QEMU ARM + Buildroot | ⬜ |
@@ -79,6 +53,7 @@ struct blocking_dev {
 | simple_gpio | `~/linux-dev/simple_gpio/` | 字符設備驅動（LDD3 Ch3 簡化）+ ioctl 擴展 | ✅ 已實測（read/write/ioctl 5 命令全通過） |
 | scull | `~/linux-dev/scull/` | LDD3 官方 scull，含 mutex + lseek | ✅ 完整實測通過（read/write/mutex/lseek） |
 | timer | （待建） | 定時器驅動 | ⬜ |
+| blocking_io | `~/linux-dev/blocking_io/` | 字元裝置，wait_queue 實作 blocking read/write | ✅ 完整實測通過（cat 睡眠等待 + write 喚醒） |
 | platform_demo | `~/linux-dev/platform_demo/` | platform_driver 完整版（資源取用 + 中斷 + drvdata + of_match_table）| ✅ 完整實測通過 |
 | platform uart | （待建） | platform_driver + device tree | ⬜ |
 | gpio_sysfs | （待建） | QEMU GPIO + sysfs 接口 | ⬜ |
@@ -163,6 +138,16 @@ struct blocking_dev {
   - **為何需要 ioremap**：Linux 有 MMU，kernel 跑在虛擬位址空間，不能直接用實體位址（不同於 STM32 直接操作實體位址）
   - **devm_ 系列**：managed API，`remove` 時 kernel 自動釋放，不需要手動清理
   - **建立 platform_demo 骨架**：4 個檔案（platform_demo.h / platform_demo.c / platform_device_demo.c / Makefile），device 和 driver 分兩個 .ko，手動模擬 DTS 配對
+
+### Week 11
+
+- **2026-07-22** 完成 `blocking_io` driver（LDD3 Ch06 blocking I/O 實作）
+  - **核心機制**：`wait_event_interruptible(wq, condition)` + `wake_up_interruptible(&wq)` 是一對，前者讓 process 睡到條件成立為止（真正睡眠，不占 CPU，不同於 `while(!ready);` 忙等），後者由另一個 process 呼叫，喚醒睡在該 wait_queue 上的所有 process
+  - **關鍵陷阱：睡眠前必須先 unlock**：`mutex_lock` 之後如果直接呼叫 `wait_event_interruptible` 睡著，鎖不會被自動釋放，會造成死鎖（因為能喚醒 reader 的 writer 也需要搶同一把鎖，卻進不來）。正確順序：`mutex_unlock` → `wait_event_interruptible` → 醒來後 `mutex_lock`
+  - **`wait_event_interruptible` 回傳值**：非 0 代表睡眠被 signal 打斷（如 Ctrl+C），要回傳 `-ERESTARTSYS`，不是回傳資料本身
+  - **`blocking_read`/`blocking_write` 對稱設計**：read 沒資料就睡、有資料才 `copy_to_user` 並清空 `data_ready`；write 把資料 `copy_from_user` 存進 buffer、設定 `data_ready=1`，最後呼叫 `wake_up_interruptible` 叫醒睡著的 reader
+  - **實測驗證**：終端機 A 執行 `cat /dev/blocking_io` 卡住（真睡眠，非忙等）；終端機 B `echo | tee` 寫入後，A 立刻印出資料，證實 wait_queue 機制運作正常
+  - **踩坑**：`.c` 檔一開始只 include 了 `linux/module.h`，導致 `struct file`、`file_operations`、`copy_to/from_user`、`cdev` 系列全部找不到定義；補上 `linux/kernel.h`、`linux/fs.h`、`linux/cdev.h`、`linux/uaccess.h` 才編譯過
 
 - **2026-06-30** 深入理解 scull 指標機制（透過考題練習）
   - **`filp->private_data` 橋接機制**：`open` 用 `container_of` 找到正確的 `scull_dev`，把位址存進 `filp->private_data`；`read`/`write` 直接從 `filp` 取回，不需要重新搜尋。4 個裝置各自有 `filp`，靠這個機制區分操作的是哪一個
