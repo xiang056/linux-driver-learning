@@ -10,16 +10,17 @@
 
 > 最後更新：2026-07-22
 
-- **階段**：第二階段 — Blocking I/O（LDD3 Ch06）
-- **實際時間**：第 4 週（計劃進度 W11-12，進行中）
-- **進度**：blocking_io driver 完整實作並實測通過（read 睡眠等待 + write 喚醒）
-- **完成度**：約 52%
-- **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/`
+- **階段**：第三階段 — QEMU ARM 環境
+- **實際時間**：第 4 週（計劃進度提前跳到 W17-18）
+- **進度**：Buildroot 完整編譯出 ARM kernel + rootfs，QEMU vexpress-a9 開機成功，`uname -a` 確認 armv7l
+- **完成度**：約 58%
+- **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/` ｜ Buildroot 目錄 `~/linux-dev/buildroot/`
 
 ### ▶️ 下一步要做的事
 
-1. LDD3 Ch07-9（時間管理 / 記憶體 / DMA）或直接跳 QEMU ARM 環境建立
-2. QEMU ARM 環境建立後，回頭把 platform_demo 的 `devm_ioremap` 在真實 MMIO 位址上驗證
+1. 針對 `~/linux-dev/buildroot/output/build/linux-6.18.7` 這份 kernel source 交叉編譯 `platform_demo.ko`（用 Buildroot 產生的 `arm-buildroot-linux-gnueabihf-` 工具鏈）
+2. 把編好的 `.ko` 放進 rootfs（或用 QEMU 的 `-virtfs`/scp 方式傳進去），在 QEMU 裡 `insmod`
+3. 在真實 ARM MMIO 位址（非 RAM）上驗證 `devm_ioremap_resource`，補完 platform_demo 當初在 WSL2 x86 卡住的那塊
 
 ---
 
@@ -35,7 +36,7 @@
 | 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | ✅ 完成（platform_demo + blocking_io 全通過） |
 | 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | ⬜ |
 | 二 | W15-16 | Platform Driver + Device Tree | ⬜ |
-| 三 | W17-18 | QEMU ARM + Buildroot | ⬜ |
+| 三 | W17-18 | QEMU ARM + Buildroot | ✅ 完成（vexpress-a9 開機成功，armv7l 確認） |
 | 三 | W19-20 | QEMU 上 GPIO Driver (sysfs) | ⬜ |
 | 三 | W21-22 | UART Driver | ⬜ |
 | 三 | W23-24 | 整合項目：多設備驅動框架 | ⬜ |
@@ -140,6 +141,17 @@
   - **建立 platform_demo 骨架**：4 個檔案（platform_demo.h / platform_demo.c / platform_device_demo.c / Makefile），device 和 driver 分兩個 .ko，手動模擬 DTS 配對
 
 ### Week 11
+
+- **2026-07-22** 完成 QEMU ARM 環境建置（Buildroot 全套編譯 + vexpress-a9 開機成功）
+  - **為什麼要這步**：WSL2 是 x86_64，之前 platform_demo 的 `devm_ioremap` 一直卡在「0x10000000 是 RAM 位址不能 ioremap」；要驗證真實硬體驅動邏輯，必須換到真正的 ARM 環境
+  - **Buildroot 流程**：`git clone buildroot` → `make qemu_arm_vexpress_defconfig` → `make`，一次編出交叉編譯工具鏈（`arm-buildroot-linux-gnueabihf-`）、Linux kernel（`zImage`）、根檔案系統（`rootfs.ext2`）、device tree（`vexpress-v2p-ca9.dtb`）
+  - **踩坑：WSL2 PATH 汙染**：WSL2 會把 Windows PATH（含空格路徑如 `C:\Program Files\...`）自動附加進 Linux PATH，Buildroot 嚴格檢查禁止 PATH 含空格，直接編譯會報 `dependencies.mk Error 1`。解法：編譯時用乾淨 PATH，`PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin make -j$(nproc)`
+  - **踩坑：host-cmake bootstrap 連結失敗**：`-j16` 高平行度下 CMake 自帶的 bootstrap 腳本出現 `undefined reference to cmsys::SystemToolsManager` 這類連結錯誤（已知的平行編譯 race condition）。解法：`make host-cmake-dirclean` 清掉重編，之後改用較低的 `-j4`
+    避免。
+  - **背景編譯與工作階段的坑**：用 `nohup ... &` 讓編譯在背景跑，如果外層指令本身直接返回（沒有保持 attach），這個背景行程可能因為工作階段中斷而跟著消失，而不是編譯本身出錯。要嘛讓外層指令保持前景阻塞（讓工具自己的背景執行機制追蹤整個生命週期），要嘛正確做好 `disown` 讓行程完全脫鉤。
+  - **開機驗證**：`./start-qemu.sh --serial-only`，QEMU 模擬 vexpress-a9（ARM Cortex-A9）開機，完整跑過 kernel 初始化、EXT4 掛載 rootfs、`udhcpc` 拿到網路，最後進入 `buildroot login:`，`root` 免密碼登入
+  - **`uname -a`** 確認 `armv7l`，證實這是真正的 ARM 架構，不是 x86 模擬
+  - **下一步**：要用 Buildroot 產生的交叉編譯工具鏈重新編譯 `platform_demo.ko`（對應這份 `linux-6.18.7` kernel source），才能在 QEMU 裡 `insmod` 測試
 
 - **2026-07-22** 完成 `blocking_io` driver（LDD3 Ch06 blocking I/O 實作）
   - **核心機制**：`wait_event_interruptible(wq, condition)` + `wake_up_interruptible(&wq)` 是一對，前者讓 process 睡到條件成立為止（真正睡眠，不占 CPU，不同於 `while(!ready);` 忙等），後者由另一個 process 呼叫，喚醒睡在該 wait_queue 上的所有 process

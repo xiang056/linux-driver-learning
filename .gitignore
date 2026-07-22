@@ -23,3 +23,6 @@ simple_gpio/gpio_test
 *.swp
 *~
 _*.sh
+
+# ── Buildroot（自己編譯的完整工具鏈/kernel/rootfs，體積達數十 GB，不該進版控）──
+buildroot/
