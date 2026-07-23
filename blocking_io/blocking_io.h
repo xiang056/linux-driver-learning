@@ -12,7 +12,8 @@ struct blocking_dev {
 	int data_len; //buf目前有幾個byte
 	int data_ready; //flag: 0 = 無資料， 1= 有資料
 
-	wait_queue_head_t read_wq; // reader睡在這裡
+	wait_queue_head_t read_wq;  // reader睡在這裡
+	wait_queue_head_t write_wq; // writer睡在這裡（緩衝區滿時等待）
 	struct mutex lock;
 };
 

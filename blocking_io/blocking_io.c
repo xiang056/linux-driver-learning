@@ -3,6 +3,7 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/uaccess.h>
+#include <linux/poll.h>
 #include "blocking_io.h"
 
 
@@ -53,8 +54,26 @@ ssize_t blocking_write(struct file *filp, const char __user *buf, size_t count, 
 	dev->data_len = count;
 	dev->data_ready = 1;
 	mutex_unlock(&dev->lock);
-	wake_up_interruptible(&dev->read_wq); //喚醒睡在read
+	wake_up_interruptible(&dev->read_wq);
 	return count;
+}
+
+static __poll_t blocking_poll(struct file *filp, poll_table *wait)
+{
+	struct blocking_dev *dev = filp->private_data;
+	__poll_t mask = 0;
+
+	poll_wait(filp, &dev->read_wq,  wait);
+	poll_wait(filp, &dev->write_wq, wait);
+
+	mutex_lock(&dev->lock);
+	if (dev->data_ready)
+		mask |= EPOLLIN | EPOLLRDNORM;  // 有資料，可讀
+	if (!dev->data_ready)
+		mask |= EPOLLOUT | EPOLLWRNORM; // 緩衝區空，可寫
+	mutex_unlock(&dev->lock);
+
+	return mask;
 }
 
 static int blocking_open(struct inode *inode, struct file *filp){
@@ -71,6 +90,7 @@ static struct file_operations blocking_fops = {
 	.open = blocking_open,
 	.read = blocking_read,
 	.write = blocking_write,
+	.poll = blocking_poll,
 	.release = blocking_release,
 };
 
@@ -83,7 +103,7 @@ static int __init blocking_init(void){
 
 	mutex_init(&my_dev.lock);
 	init_waitqueue_head(&my_dev.read_wq);
-	//init_waitqueue_head(&my_dev.write_wq);
+	init_waitqueue_head(&my_dev.write_wq);
 
 	cdev_init(&my_cdev, &blocking_fops);
 	my_cdev.owner = THIS_MODULE;

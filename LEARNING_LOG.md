@@ -8,19 +8,20 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-22
+> 最後更新：2026-07-23
 
 - **階段**：第三階段 — QEMU ARM 環境
 - **實際時間**：第 4 週（計劃進度提前跳到 W17-18）
-- **進度**：Buildroot 完整編譯出 ARM kernel + rootfs，QEMU vexpress-a9 開機成功，`uname -a` 確認 armv7l
-- **完成度**：約 58%
+- **進度**：blocking_io 加上 poll/select 支援；platform_demo Makefile 改成支援 ARM 交叉編譯
+- **完成度**：約 60%
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/` ｜ Buildroot 目錄 `~/linux-dev/buildroot/`
 
-### ▶️ 下一步要做的事
+### ▶️ 下一步要做的事（回家從這裡開始）
 
-1. 針對 `~/linux-dev/buildroot/output/build/linux-6.18.7` 這份 kernel source 交叉編譯 `platform_demo.ko`（用 Buildroot 產生的 `arm-buildroot-linux-gnueabihf-` 工具鏈）
-2. 把編好的 `.ko` 放進 rootfs（或用 QEMU 的 `-virtfs`/scp 方式傳進去），在 QEMU 裡 `insmod`
-3. 在真實 ARM MMIO 位址（非 RAM）上驗證 `devm_ioremap_resource`，補完 platform_demo 當初在 WSL2 x86 卡住的那塊
+1. 重新編譯 `blocking_io`，確認 poll 加進去沒有編譯錯誤
+2. 測試 poll：用 Python `select` 或寫 C 程式確認 `EPOLLIN` / `EPOLLOUT` 回傳正確
+3. `make CROSS=1` 交叉編譯 `platform_demo.ko`，放進 QEMU 跑 `insmod`
+4. 在真實 ARM MMIO 位址（非 RAM）上驗證 `devm_ioremap_resource`
 
 ---
 
@@ -157,6 +158,12 @@
   - **核心機制**：`wait_event_interruptible(wq, condition)` + `wake_up_interruptible(&wq)` 是一對，前者讓 process 睡到條件成立為止（真正睡眠，不占 CPU，不同於 `while(!ready);` 忙等），後者由另一個 process 呼叫，喚醒睡在該 wait_queue 上的所有 process
   - **關鍵陷阱：睡眠前必須先 unlock**：`mutex_lock` 之後如果直接呼叫 `wait_event_interruptible` 睡著，鎖不會被自動釋放，會造成死鎖（因為能喚醒 reader 的 writer 也需要搶同一把鎖，卻進不來）。正確順序：`mutex_unlock` → `wait_event_interruptible` → 醒來後 `mutex_lock`
   - **`wait_event_interruptible` 回傳值**：非 0 代表睡眠被 signal 打斷（如 Ctrl+C），要回傳 `-ERESTARTSYS`，不是回傳資料本身
+
+- **2026-07-23** blocking_io 加上 poll/select 支援（`.poll` callback）
+  - **為什麼需要 poll**：blocking read 一次只能顧一個 fd；同時監聽多個裝置時（如 UART + sensor），需要 `select`/`poll`/`epoll`，哪個 fd 有資料就處理哪個，不會互相卡住
+  - **user 呼叫 `select()`，kernel 呼叫 driver 的 `.poll`**：driver 回傳 bitmask（`EPOLLIN`=可讀、`EPOLLOUT`=可寫），kernel 再告訴 user 哪個 fd 準備好
+  - **`poll_wait()` 不會睡**：只是把 wait_queue 登記給 kernel 監聽，真正等待是 kernel 的事；driver `.poll` 本身只負責「回報狀態」，不改任何 flag
+  - **platform_demo Makefile 新增 ARM 交叉編譯**：`make CROSS=1` 切換到 `arm-buildroot-linux-gnueabihf-` 工具鏈 + `linux-6.18.7` kernel source；`make` 維持原本 WSL2 x86 編譯
   - **`blocking_read`/`blocking_write` 對稱設計**：read 沒資料就睡、有資料才 `copy_to_user` 並清空 `data_ready`；write 把資料 `copy_from_user` 存進 buffer、設定 `data_ready=1`，最後呼叫 `wake_up_interruptible` 叫醒睡著的 reader
   - **實測驗證**：終端機 A 執行 `cat /dev/blocking_io` 卡住（真睡眠，非忙等）；終端機 B `echo | tee` 寫入後，A 立刻印出資料，證實 wait_queue 機制運作正常
   - **踩坑**：`.c` 檔一開始只 include 了 `linux/module.h`，導致 `struct file`、`file_operations`、`copy_to/from_user`、`cdev` 系列全部找不到定義；補上 `linux/kernel.h`、`linux/fs.h`、`linux/cdev.h`、`linux/uaccess.h` 才編譯過
