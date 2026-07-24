@@ -168,6 +168,44 @@
   - **實測驗證**：終端機 A 執行 `cat /dev/blocking_io` 卡住（真睡眠，非忙等）；終端機 B `echo | tee` 寫入後，A 立刻印出資料，證實 wait_queue 機制運作正常
   - **踩坑**：`.c` 檔一開始只 include 了 `linux/module.h`，導致 `struct file`、`file_operations`、`copy_to/from_user`、`cdev` 系列全部找不到定義；補上 `linux/kernel.h`、`linux/fs.h`、`linux/cdev.h`、`linux/uaccess.h` 才編譯過
 
+- **2026-07-24** Linux 核心概念補強（公司純 Windows 環境，純概念學習）
+
+  **Linux 整體架構：**
+  - User Space → syscall 邊界 → VFS → Driver 層 → Hardware，由上到下
+  - User 不能直接碰硬體，只能透過 syscall（open/read/write/ioctl）進入 kernel
+  - VFS 把所有東西當檔案，`/dev/xxx` 看起來像檔案，背後是你寫的 driver
+
+  **六個核心概念重新釐清：**
+  - **`filp->private_data`**：open/read/write 三個函式之間共享資料的橋，open 存進去，read/write 取出來
+  - **`container_of`**：kernel 只給你結構體內某個欄位的位址，往前算 offset 找出整個結構體起點
+  - **mutex + wait_event 順序**：睡眠前必須先 unlock，不然 writer 搶不到鎖永遠叫不醒 reader（死結）
+  - **`copy_to_user`**：user/kernel 是兩個隔離的記憶體空間，不能直接 memcpy，必須透過這個函式跨越邊界
+  - **`probe` vs `init`**：init 是 insmod 時跑；probe 是 kernel 配對到硬體後才呼叫，帶有硬體資源
+  - **`wake_up_interruptible`**：由 writer 呼叫，通知 kernel 喚醒睡在 wait_queue 的 reader
+
+  **Process vs IRQ context：**
+  - Process context（read/write/probe）：可以睡眠，排程器可以介入
+  - IRQ context（irq_handler/timer_callback）：不能睡眠，CPU 正在處理中斷，一睡整個系統凍結
+  - IRQ handler 只做最少的事（讀暫存器、設 flag、wake_up），複雜工作丟給 Workqueue 在 process context 執行
+
+  **Ch7 Timer / Workqueue：**
+  - `jiffies`：kernel 開機後每個 tick +1，HZ=1000 代表 1秒=1000 jiffies
+  - Timer：設定幾秒後觸發 callback，不占 CPU；callback 在 IRQ context，不能睡眠
+  - Workqueue：背景執行，跑在 process context，可以睡眠；Timer 裡需要複雜工作時用 `schedule_work` 丟給它
+
+  **虛擬記憶體 / 實體記憶體：**
+  - 實體記憶體：RAM 真實硬體位址，只有一份
+  - 虛擬記憶體：每個 process 各自看到的假位址空間，透過 MMU 翻譯成實體位址
+  - Page Table：每個 process 各自一份對應表（虛擬→實體），CPU 切換 process 時同時切換對應表
+  - User space：每個 process 各自獨立（虛擬位址相同，實體位址不同）
+  - Kernel space：所有 process 共用（虛擬位址相同，實體位址也相同）
+  - 意義：多個 process 同時執行互不干擾；RAM 不夠時可 swap 到硬碟
+
+  **kmalloc vs vmalloc：**
+  - `kmalloc`：實體連續，速度快，限制約 4MB，99% 的 driver 用這個
+  - `vmalloc`：虛擬連續實體不連續，可分配大塊記憶體，速度慢，DMA 不能用
+  - 選擇原則：小於 1MB 用 kmalloc，大於 1MB 用 vmalloc，DMA 用 dma_alloc_coherent
+
 - **2026-06-30** 深入理解 scull 指標機制（透過考題練習）
   - **`filp->private_data` 橋接機制**：`open` 用 `container_of` 找到正確的 `scull_dev`，把位址存進 `filp->private_data`；`read`/`write` 直接從 `filp` 取回，不需要重新搜尋。4 個裝置各自有 `filp`，靠這個機制區分操作的是哪一個
   - **`container_of` 數學**：`scull_dev 起點 = i_cdev 位址 - cdev 的 offset`；offset 算法 = 前面所有欄位大小相加（data:8 + size:8 + lock:40 = 56，所以 cdev offset = 56）
