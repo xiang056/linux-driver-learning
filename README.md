@@ -1,44 +1,81 @@
-# Linux 驅動學習筆記
+# Linux Kernel Driver 實作
 
-跟著 LDD3 從零開始寫 kernel module。
-
-- 環境：WSL2 Ubuntu 22.04
-- 進度：LDD3 Ch1～Ch4 完成，scull 完整實作（file_ops / mutex / lseek）
-- 目標：Character Device → Platform Driver → QEMU ARM 實機驗證
+以 LDD3 為主軸，在 WSL2 與 QEMU ARM 環境實測的 kernel driver 開發紀錄。
 
 ---
 
-## 專案列表
+## 環境
 
-| 專案 | 對應章節 | 說明 | 狀態 |
-|------|---------|------|------|
-| [hello_module](./hello_module/) | LDD3 Ch2 | 最小 kernel module，printk / init / exit | ✅ |
-| [hello_param](./hello_param/) | LDD3 Ch2 | module_param + sysfs 讀寫實測 | ✅ |
-| [my_module](./my_module/) | Ch2 延伸 | 自己從頭寫的 hello module | ✅ |
-| [simple_gpio](./simple_gpio/) | LDD3 Ch3 | 字元設備驅動，模擬 GPIO 讀寫 + ioctl 擴展（GET/SET/ON/OFF/TOGGLE） | ✅ |
-| [scull](./scull/) | LDD3 Ch3 | 完整 scull，含 mutex 並發保護 + lseek | ✅ |
-| platform_driver | LDD3 Ch14 | Platform Driver + Device Tree | ⬜ |
-| gpio_qemu | — | QEMU ARM 上的 GPIO sysfs 驅動 | ⬜ |
+| 項目 | 版本 |
+|------|------|
+| 開發環境 | WSL2 Ubuntu 22.04 |
+| ARM 測試環境 | QEMU vexpress-a9（ARM Cortex-A9） |
+| Kernel（x86） | 6.6.x（WSL2） |
+| Kernel（ARM） | 6.18.7（Buildroot） |
+| ARM 工具鏈 | arm-buildroot-linux-gnueabihf- |
 
 ---
 
-## 環境建置
+## 驅動清單
+
+### simple_gpio — 字元裝置驅動
+LDD3 Ch3 核心機制實作，模擬 GPIO 讀寫。
+
+- major/minor 動態申請、cdev 註冊
+- read / write / ioctl（5 個命令：ON / OFF / TOGGLE / SET / GET）
+- 實測：insmod → mknod → echo / cat → ioctl 全通過
+
+---
+
+### scull — 記憶體字元裝置
+LDD3 官方範例，用 kernel 記憶體模擬字元裝置。
+
+- mutex 保護共享資料、lseek 支援
+- 4 個獨立裝置（/dev/scull0 ~ /dev/scull3）
+- 實測：read / write / mutex / lseek 全通過
+
+---
+
+### blocking_io — 阻塞 I/O 驅動
+LDD3 Ch6 wait_queue 機制實作。
+
+- `wait_event_interruptible` + `wake_up_interruptible`
+- poll / select / epoll 支援（`.poll` callback）
+- 實測：`cat` 睡眠等待，`write` 喚醒，`select` 狀態回報正確
+
+---
+
+### platform_demo — Platform Driver
+LDD3 Ch14 平台驅動框架實作。
+
+- probe / remove 生命週期、`devm_` managed API
+- 資源取用（`platform_get_resource`）、IRQ 申請（`devm_request_irq`）
+- `of_match_table` / `MODULE_DEVICE_TABLE`
+- 支援 ARM 交叉編譯（`make CROSS=1`）
+- 實測：WSL2 x86 probe / remove 通過；QEMU ARM 進行中
+
+---
+
+## 編譯方式
 
 ```bash
-# WSL2 安裝必要套件
-sudo apt install build-essential linux-headers-$(uname -r)
-
-# 編譯任一模組
-cd hello_module
+# x86（WSL2 本機）
 make
-sudo insmod hello.ko
-dmesg | tail -5
-sudo rmmod hello
+
+# ARM 交叉編譯（需 Buildroot 工具鏈）
+make CROSS=1
+
+# 載入模組
+sudo insmod xxx.ko
+dmesg | tail -10
+
+# 卸載
+sudo rmmod xxx
 ```
 
 ---
 
-## 學習資源
+## 參考資源
 
-- [Linux Device Drivers, 3rd Edition（LDD3）](https://lwn.net/Kernel/LDD3/)
-- [LEARNING_LOG.md](./LEARNING_LOG.md) — 每週進度與踩坑記錄
+- [Linux Device Drivers, 3rd Edition (LDD3)](https://lwn.net/Kernel/LDD3/)
+- [LEARNING_LOG.md](./LEARNING_LOG.md) — 進度與踩坑記錄
