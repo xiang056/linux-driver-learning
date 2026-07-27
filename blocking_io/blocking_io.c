@@ -6,7 +6,6 @@
 #include <linux/poll.h>
 #include "blocking_io.h"
 
-
 static struct blocking_dev my_dev;
 static dev_t dev_num;
 static struct cdev my_cdev;
@@ -34,6 +33,7 @@ ssize_t blocking_read(struct file *filp, char __user *buf, size_t count, loff_t 
 	}
 	
 	dev->data_ready = 0;
+	wake_up_interruptible(&dev->write_wq);
 	mutex_unlock(&dev->lock);
 
 	return count;

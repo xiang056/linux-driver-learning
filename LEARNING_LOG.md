@@ -8,20 +8,25 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-24
+> 最後更新：2026-07-27
 
 - **階段**：第三階段 — QEMU ARM 環境
 - **實際時間**：第 4 週（計劃進度提前跳到 W17-18）
-- **進度**：blocking_io poll 支援完成、概念補強（Linux架構/虛擬記憶體/IRQ context/kmalloc）
+- **進度**：blocking_io 重新編譯過關，修正 poll 對稱性 bug（read 忘記喚醒 write_wq），準備寫 C 測試程式驗證 poll
 - **完成度**：約 62%
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/` ｜ Buildroot 目錄 `~/linux-dev/buildroot/`
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
 
-1. 重新編譯 `blocking_io`，確認 poll 加進去沒有編譯錯誤
-2. 測試 poll：用 Python `select` 或寫 C 程式確認 `EPOLLIN` / `EPOLLOUT` 回傳正確
+1. 【公司可做，純寫程式碼，不能編譯】在 `~/linux-dev/blocking_io/` 新建 `poll_test.c`（user space 測試程式），用骨架填 3 個 TODO：
+   - `pfd.events` 要設定成什麼（同時監聽可讀 + 可寫）
+   - `poll()` 的 `nfds` 和 `timeout` 參數
+   - 判斷 `pfd.revents` 印出 POLLIN / POLLOUT 結果
+2. 【回家在 WSL 做】`gcc -o poll_test poll_test.c` 編譯 → insmod blocking_io → mknod → 跑 `./poll_test` 驗證 `EPOLLIN`/`EPOLLOUT` 回傳正確
 3. `make CROSS=1` 交叉編譯 `platform_demo.ko`，放進 QEMU 跑 `insmod`
 4. 在真實 ARM MMIO 位址（非 RAM）上驗證 `devm_ioremap_resource`
+
+> 註：公司是純 Windows 環境，沒有 WSL，`poll_test.c` 只能用 VSCode 寫程式碼本身（邏輯、語法），不能編譯執行也不能碰 kernel module；驗證動作留到回家。
 
 ---
 
@@ -206,6 +211,11 @@
   - `vmalloc`：虛擬連續實體不連續，可分配大塊記憶體，速度慢，DMA 不能用
   - 選擇原則：小於 1MB 用 kmalloc，大於 1MB 用 vmalloc，DMA 用 dma_alloc_coherent
 
+- **2026-07-27** 重新編譯 `blocking_io`（確認 poll 支援無編譯錯誤），並修正 poll 對稱性 bug
+  - **`poll_wait()` 只是登記，不是等待**：把目前 process 掛到指定 wait_queue 上，讓 kernel 之後知道要監聽哪個 queue；真正的睡眠/喚醒仍要靠 `wait_event_interruptible` / `wake_up_interruptible`
+  - **對稱性陷阱**：`blocking_write` 寫完會 `wake_up_interruptible(&dev->read_wq)`，但 `blocking_read` 讀完只把 `data_ready` 設回 0，卻忘了對稱地 `wake_up_interruptible(&dev->write_wq)`——導致睡在 `write_wq` 上等 `EPOLLOUT` 的 process 永遠不會被喚醒（除非被 signal 打斷）。有 wait_queue 就要找到「誰負責在對應時機呼叫 wake_up」，兩邊角色都要检查，不能只顧其中一個方向
+  - **下一步**：寫 C 測試程式用 `poll()` 實測 `EPOLLIN`/`EPOLLOUT` 是否正確回報
+
 - **2026-06-30** 深入理解 scull 指標機制（透過考題練習）
   - **`filp->private_data` 橋接機制**：`open` 用 `container_of` 找到正確的 `scull_dev`，把位址存進 `filp->private_data`；`read`/`write` 直接從 `filp` 取回，不需要重新搜尋。4 個裝置各自有 `filp`，靠這個機制區分操作的是哪一個
   - **`container_of` 數學**：`scull_dev 起點 = i_cdev 位址 - cdev 的 offset`；offset 算法 = 前面所有欄位大小相加（data:8 + size:8 + lock:40 = 56，所以 cdev offset = 56）
@@ -255,6 +265,7 @@
 | 2026-06-25 | `simple_gpio` make 報 `/lib/modules/.../build: No such file` | Makefile KDIR 指向系統 build 符號連結，WSL2 沒有對應 headers | 改 KDIR 指向已完整編譯的 kernel source：`~/linux-dev/my_module/WSL2-Linux-Kernel-linux-msft-wsl-6.6.114.1` |
 | 2026-06-25 | `echo "gpio_on" > /dev/simple_gpio` 報 Permission denied | shell 重導向由目前 user 執行，不繼承 sudo 權限 | 改用 `echo "gpio_on" \| sudo tee /dev/simple_gpio` |
 | 2026-06-30 | `rmmod platform_device_demo` 觸發 kernel oops | 靜態定義的 `platform_device` 沒有提供 `.dev.release`，卸載時 kernel 不知道如何釋放裝置 | 在 `platform_device` 加上 `.dev = { .release = demo_device_release }` |
+| 2026-07-27 | `blocking_io` 的 poll 機制：select/poll 等 `EPOLLOUT` 的 process 讀完資料後永遠不會醒 | `blocking_read` 把 `data_ready` 設回 0（buffer 變空、變可寫）後，沒有呼叫 `wake_up_interruptible(&dev->write_wq)`；`poll_wait()` 只是登記，真正喚醒要靠明確呼叫 `wake_up`，不是被動偵測狀態改變 | 在 `blocking_read` 的 `dev->data_ready = 0;` 之後補上 `wake_up_interruptible(&dev->write_wq);`，跟 `blocking_write` 喚醒 `read_wq` 對稱 |
 
 > 註：源碼樹原本屬 root，編譯前先 `sudo chown -R $USER /usr/src/wsl2-headers-$(uname -r)`，之後編模組就不用 sudo（只有 insmod/rmmod 需要 root）。
 
