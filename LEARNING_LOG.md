@@ -8,12 +8,12 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-23
+> 最後更新：2026-07-24
 
 - **階段**：第三階段 — QEMU ARM 環境
 - **實際時間**：第 4 週（計劃進度提前跳到 W17-18）
-- **進度**：blocking_io 加上 poll/select 支援；platform_demo Makefile 改成支援 ARM 交叉編譯
-- **完成度**：約 60%
+- **進度**：blocking_io poll 支援完成、概念補強（Linux架構/虛擬記憶體/IRQ context/kmalloc）
+- **完成度**：約 62%
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/` ｜ Buildroot 目錄 `~/linux-dev/buildroot/`
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
