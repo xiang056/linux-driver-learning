@@ -8,7 +8,7 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-27
+> 最後更新：2026-07-27（含 stm32_linux_bridge 草稿）
 
 - **階段**：第三階段 — QEMU ARM 環境
 - **實際時間**：第 4 週（計劃進度提前跳到 W17-18）
@@ -210,6 +210,12 @@
   - `kmalloc`：實體連續，速度快，限制約 4MB，99% 的 driver 用這個
   - `vmalloc`：虛擬連續實體不連續，可分配大塊記憶體，速度慢，DMA 不能用
   - 選擇原則：小於 1MB 用 kmalloc，大於 1MB 用 vmalloc，DMA 用 dma_alloc_coherent
+
+- **2026-07-27** 草擬 `stm32_linux_bridge/DESIGN.md`——履歷作品構想
+  - **目標**：STM32 韌體 + Linux `serdev` driver 的 coprocessor 系統，同時展示韌體與 kernel 兩邊能力，作為轉職履歷招牌作品
+  - **架構決定**：選 `serdev` 子系統（UART 接 MCU 的正確 kernel 框架，藍牙 HCI UART、GPS receiver 都用這套），不是 user space 直接讀 tty
+  - **前置依賴**：`serdev` 的 Device Tree 綁定邏輯跟目前在學的 platform driver 相通，但 Device Tree 本身（W15-16）跟 sysfs 介面設計（W19-20）都還沒實測過——決定先把這兩塊計劃表走完，再回頭做這個 project，避免 DT + serdev 兩個新概念同時疊加卡關
+  - **狀態**：純設計草稿，尚未開工
 
 - **2026-07-27** 重新編譯 `blocking_io`（確認 poll 支援無編譯錯誤），並修正 poll 對稱性 bug
   - **`poll_wait()` 只是登記，不是等待**：把目前 process 掛到指定 wait_queue 上，讓 kernel 之後知道要監聽哪個 queue；真正的睡眠/喚醒仍要靠 `wait_event_interruptible` / `wake_up_interruptible`
