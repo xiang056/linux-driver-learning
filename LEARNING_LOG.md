@@ -8,25 +8,19 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-27（含 stm32_linux_bridge 草稿）
+> 最後更新：2026-07-28（poll_test.c 寫完）
 
 - **階段**：第三階段 — QEMU ARM 環境
 - **實際時間**：第 4 週（計劃進度提前跳到 W17-18）
-- **進度**：blocking_io 重新編譯過關，修正 poll 對稱性 bug（read 忘記喚醒 write_wq），準備寫 C 測試程式驗證 poll
+- **進度**：`poll_test.c` 寫完（user space select 測試程式），等回家編譯實測
 - **完成度**：約 62%
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/` ｜ Buildroot 目錄 `~/linux-dev/buildroot/`
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
 
-1. 【公司可做，純寫程式碼，不能編譯】在 `~/linux-dev/blocking_io/` 新建 `poll_test.c`（user space 測試程式），用骨架填 3 個 TODO：
-   - `pfd.events` 要設定成什麼（同時監聽可讀 + 可寫）
-   - `poll()` 的 `nfds` 和 `timeout` 參數
-   - 判斷 `pfd.revents` 印出 POLLIN / POLLOUT 結果
-2. 【回家在 WSL 做】`gcc -o poll_test poll_test.c` 編譯 → insmod blocking_io → mknod → 跑 `./poll_test` 驗證 `EPOLLIN`/`EPOLLOUT` 回傳正確
-3. `make CROSS=1` 交叉編譯 `platform_demo.ko`，放進 QEMU 跑 `insmod`
-4. 在真實 ARM MMIO 位址（非 RAM）上驗證 `devm_ioremap_resource`
-
-> 註：公司是純 Windows 環境，沒有 WSL，`poll_test.c` 只能用 VSCode 寫程式碼本身（邏輯、語法），不能編譯執行也不能碰 kernel module；驗證動作留到回家。
+1. 【回家在 WSL 做】`gcc -o poll_test poll_test.c` 編譯 → insmod blocking_io → mknod → 跑 `./poll_test` 驗證 `EPOLLIN`/`EPOLLOUT` 回傳正確
+2. `make CROSS=1` 交叉編譯 `platform_demo.ko`，放進 QEMU 跑 `insmod`
+3. 在真實 ARM MMIO 位址（非 RAM）上驗證 `devm_ioremap_resource`
 
 ---
 
@@ -216,6 +210,17 @@
   - **架構決定**：選 `serdev` 子系統（UART 接 MCU 的正確 kernel 框架，藍牙 HCI UART、GPS receiver 都用這套），不是 user space 直接讀 tty
   - **前置依賴**：`serdev` 的 Device Tree 綁定邏輯跟目前在學的 platform driver 相通，但 Device Tree 本身（W15-16）跟 sysfs 介面設計（W19-20）都還沒實測過——決定先把這兩塊計劃表走完，再回頭做這個 project，避免 DT + serdev 兩個新概念同時疊加卡關
   - **狀態**：純設計草稿，尚未開工
+
+- **2026-07-28** 完成 `poll_test.c`——user space select 測試程式（公司 Windows 環境純寫碼）
+  - **select 流程**：`FD_ZERO` 清空集合 → `FD_SET` 把 fd 放進去 → `tv` 設逾時 → `select()` 等待 → `FD_ISSET` 確認哪個 fd 觸發
+  - **fd 是整數**：`open()` 回傳一個編號（整數），0/1/2 被 stdin/stdout/stderr 佔用，第一個自開的 fd 通常是 3；之後 read/write/close 都靠這個號碼操作
+  - **`nfds = fd + 1`**：select() 內部從 0 掃到 nfds-1，要告訴它掃到哪裡停；監聽多個 fd 時填最大值 + 1
+  - **`struct timeval`**：`tv_sec`=秒、`tv_usec`=微秒；select() 回傳 0 = 逾時，>0 = 有 fd 就緒，<0 = 出錯
+  - **`FD_ZERO/FD_SET/FD_ISSET`** 是巨集，不需要背，記住用途：清空、加入、判斷
+  - **`const char *msg = "hello poll"`**：字串字面值放在 `.rodata`（唯讀區），`msg` 是指向它的指標；`const` 表示不能修改
+  - **`perror("open")`**：印出 `open: No such file or directory` 這類人看得懂的錯誤，自動讀 errno 翻譯
+  - **測試邏輯**：write 寫資料進 driver（data_ready=1）→ select 問可讀嗎（kernel 呼叫 .poll 回傳 EPOLLIN）→ FD_ISSET 確認 → read 讀出並印出
+  - **回家驗證**：`gcc -o poll_test poll_test.c` → `sudo insmod blocking_io.ko` → `mknod` → `./poll_test`，預期印出 `read: hello poll`
 
 - **2026-07-27** 重新編譯 `blocking_io`（確認 poll 支援無編譯錯誤），並修正 poll 對稱性 bug
   - **`poll_wait()` 只是登記，不是等待**：把目前 process 掛到指定 wait_queue 上，讓 kernel 之後知道要監聽哪個 queue；真正的睡眠/喚醒仍要靠 `wait_event_interruptible` / `wake_up_interruptible`
