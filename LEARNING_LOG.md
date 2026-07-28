@@ -8,19 +8,22 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-28（poll_test.c 寫完）
+> 最後更新：2026-07-28（platform_demo 在 QEMU 真實 ARM 環境驗證完成）
 
 - **階段**：第三階段 — QEMU ARM 環境
 - **實際時間**：第 4 週（計劃進度提前跳到 W17-18）
-- **進度**：`poll_test.c` 寫完（user space select 測試程式），等回家編譯實測
+- **進度**：`platform_demo.ko` 成功在 QEMU vexpress-a9 上 `insmod`；驗證了 `devm_ioremap_resource` 在真實 MMIO 位址上會真的做資源衝突檢查（`-EBUSY`），跟 WSL2 x86 那種「RAM 不能 ioremap」是不同層級的失敗
 - **完成度**：約 62%
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/` ｜ Buildroot 目錄 `~/linux-dev/buildroot/`
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
 
-1. 【回家在 WSL 做】`gcc -o poll_test poll_test.c` 編譯 → insmod blocking_io → mknod → 跑 `./poll_test` 驗證 `EPOLLIN`/`EPOLLOUT` 回傳正確
-2. `make CROSS=1` 交叉編譯 `platform_demo.ko`，放進 QEMU 跑 `insmod`
-3. 在真實 ARM MMIO 位址（非 RAM）上驗證 `devm_ioremap_resource`
+1. **Platform Driver + Device Tree（W15-16）**——優先做這個，因為 `request_irq` 那個 bug 已經證明手動塞號碼在真實 GIC/sparse-irq 環境下走不通，需要真的懂 DT 綁定才能解，也是下一步 GPIO sysfs 的前提
+2. QEMU 上的 GPIO Driver（sysfs 介面）— 計劃表 W19-20
+3. （可選）把 `DEMO_MEM_START` 改成 `0x100e4000`（disabled 的 SP804 timer，目前沒人佔用），驗證一次 `devm_ioremap_resource` 真正成功的案例
+4. （可選，之後找時間補）W13-14 的 timer driver 動手實作——概念（jiffies/Timer/Workqueue/kmalloc vs vmalloc）已經在 2026-07-24 補強過，只差一個實際的 timer 驅動產出
+
+> （可選，先跳過）`poll_test.c` 加 `EPOLLOUT` + write_wq 喚醒驗證（用 fork + select 的 wfds，parent 卡住等可寫、child sleep 後讀空 buffer 觸發喚醒）。EPOLLIN 邏輯已驗證通過，EPOLLOUT 是同一段程式碼的對稱分支，風險不高，之後有餘力再補完整驗證。
 
 ---
 
@@ -34,7 +37,7 @@
 | 一 | W7-8 | ioctl 擴展 + Ch4 Debugging | ✅ 完成（ioctl 5 個命令實測通過，Ch4 讀完） |
 | 二 | W9-10 | lseek + blocking I/O + scull 驅動 | ✅ 完成（scull 含 mutex/lseek 全通過） |
 | 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | ✅ 完成（platform_demo + blocking_io 全通過） |
-| 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | ⬜ |
+| 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | 🟡 概念補強完成（jiffies/Timer/Workqueue/kmalloc vs vmalloc，見 2026-07-24 筆記），缺實際 timer driver 產出 |
 | 二 | W15-16 | Platform Driver + Device Tree | ⬜ |
 | 三 | W17-18 | QEMU ARM + Buildroot | ✅ 完成（vexpress-a9 開機成功，armv7l 確認） |
 | 三 | W19-20 | QEMU 上 GPIO Driver (sysfs) | ⬜ |
@@ -222,6 +225,13 @@
   - **測試邏輯**：write 寫資料進 driver（data_ready=1）→ select 問可讀嗎（kernel 呼叫 .poll 回傳 EPOLLIN）→ FD_ISSET 確認 → read 讀出並印出
   - **回家驗證**：`gcc -o poll_test poll_test.c` → `sudo insmod blocking_io.ko` → `mknod` → `./poll_test`，預期印出 `read: hello poll`
 
+- **2026-07-28** `platform_demo` 在真實 ARM（QEMU vexpress-a9）環境首次實測，兩個真實硬體才會出現的 bug
+  - **交叉編譯環境設定**：Buildroot 產生的工具鏈在 `~/linux-dev/buildroot/output/host/bin/`，要 `export PATH` 才能讓 `make CROSS=1` 找到 `arm-buildroot-linux-gnueabihf-gcc`（加進 `.bashrc` 才會每次自動生效）
+  - **把 `.ko` 塞進 QEMU 的方法**：`rootfs.ext2` 是一個完整的 ext2 映像檔，開機前先在 WSL host 端 `sudo mount -o loop rootfs.ext2 /tmp/xxx`，把 `.ko` 複製進 `/root/`，`umount` 後再開機——**QEMU 開著的時候不能同時 mount 修改同一個映像檔**，容易造成檔案系統損毀
+  - **`request_irq(80)` 回傳 `-EINVAL`（bug 1）**：手動用 `platform_device_register()` 註冊裝置、憑空填一個 IRQ 號碼（不管填 13 還是換算過的 80），在真實 kernel 上都會失敗。原因是現代 kernel 用 **sparse IRQ**（開機 log `NR_IRQS: 16, nr_irqs: 16` 就是證據），Linux 的 irq 號碼是**執行時動態分配**的，只有裝置真的透過 device tree 的 `interrupts` 屬性被 `irq_of_parse_and_map()` 解析過，才會有合法的 virq——沒有 DT 綁定，憑空填的號碼永遠對應不到 `irq_desc`。這代表要真正測試 request_irq，必須先學會 Device Tree overlay（W15-16），單純改 header 裡的數字治標不治本
+  - **`devm_ioremap_resource` 回傳 `-EBUSY`（bug 2，也是這次真正驗證到的目標）**：`DEMO_MEM_START=0x10000000` 在真實 vexpress-a9 上是合法的 MMIO 位址，但已經被別的系統 driver（推測是 `dcc`/`v2m_sysreg`）佔用，`request_mem_region` 偵測到衝突直接擋下來。**這跟之前 WSL2 x86 上「0x10000000 是 RAM 不能 ioremap」是不同層級的失敗**——x86 是架構不支援，真實 ARM 是資源衝突，證明 `devm_ioremap_resource` 的保護機制在真實硬體上確實有效
+  - **probe 容錯設計**：讓 `demo_probe` 對 IRQ 失敗只印警告、不 `return`，才能繼續往下測 MEM resource，一次 probe 失敗不代表整個測試都要中斷
+
 - **2026-07-27** 重新編譯 `blocking_io`（確認 poll 支援無編譯錯誤），並修正 poll 對稱性 bug
   - **`poll_wait()` 只是登記，不是等待**：把目前 process 掛到指定 wait_queue 上，讓 kernel 之後知道要監聽哪個 queue；真正的睡眠/喚醒仍要靠 `wait_event_interruptible` / `wake_up_interruptible`
   - **對稱性陷阱**：`blocking_write` 寫完會 `wake_up_interruptible(&dev->read_wq)`，但 `blocking_read` 讀完只把 `data_ready` 設回 0，卻忘了對稱地 `wake_up_interruptible(&dev->write_wq)`——導致睡在 `write_wq` 上等 `EPOLLOUT` 的 process 永遠不會被喚醒（除非被 signal 打斷）。有 wait_queue 就要找到「誰負責在對應時機呼叫 wake_up」，兩邊角色都要检查，不能只顧其中一個方向
@@ -276,6 +286,10 @@
 | 2026-06-25 | `simple_gpio` make 報 `/lib/modules/.../build: No such file` | Makefile KDIR 指向系統 build 符號連結，WSL2 沒有對應 headers | 改 KDIR 指向已完整編譯的 kernel source：`~/linux-dev/my_module/WSL2-Linux-Kernel-linux-msft-wsl-6.6.114.1` |
 | 2026-06-25 | `echo "gpio_on" > /dev/simple_gpio` 報 Permission denied | shell 重導向由目前 user 執行，不繼承 sudo 權限 | 改用 `echo "gpio_on" \| sudo tee /dev/simple_gpio` |
 | 2026-06-30 | `rmmod platform_device_demo` 觸發 kernel oops | 靜態定義的 `platform_device` 沒有提供 `.dev.release`，卸載時 kernel 不知道如何釋放裝置 | 在 `platform_device` 加上 `.dev = { .release = demo_device_release }` |
+| 2026-07-28 | `platform_demo.c` 交叉編譯報 `.remove` pointer type 不相容（`int (*)(...)` vs `void (*)(...)`）| kernel API 版本差異：舊版（WSL2 6.6）`platform_driver.remove` 回傳 `int`；新版（Buildroot 6.18）改成 `void`，不能回傳值 | 把 `demo_remove` 簽名從 `static int demo_remove(...)` 改成 `static void demo_remove(...)`，拿掉 `return 0;` |
+| 2026-07-28 | 交叉編譯報 `arm-buildroot-linux-gnueabihf-gcc: not found` | PATH 沒有指向 Buildroot 產生的工具鏈 | `export PATH=$HOME/linux-dev/buildroot/output/host/bin:$PATH`，加進 `~/.bashrc` 才會每次自動生效 |
+| 2026-07-28 | QEMU 真實環境 `request_irq(80)` 回傳 `-EINVAL` | 手動 `platform_device_register` 塞的 IRQ 號碼沒有透過 device tree 做 irq mapping，sparse IRQ 系統下該號碼沒有對應的 `irq_desc` | 治標：probe 對 IRQ 失敗只警告不 return；治本：要用 Device Tree overlay 讓裝置真的被 `irq_of_parse_and_map()` 解析（W15-16 待補） |
+| 2026-07-28 | QEMU 真實環境 `devm_ioremap_resource` 回傳 `-EBUSY`（-16）| `0x10000000` 已被系統其他 driver（推測 v2m_sysreg）佔用記憶體區域 | 換一個目前沒人用的位址（例如 `status="disabled"` 的 `timer@100e4000`）即可成功 |
 | 2026-07-27 | `blocking_io` 的 poll 機制：select/poll 等 `EPOLLOUT` 的 process 讀完資料後永遠不會醒 | `blocking_read` 把 `data_ready` 設回 0（buffer 變空、變可寫）後，沒有呼叫 `wake_up_interruptible(&dev->write_wq)`；`poll_wait()` 只是登記，真正喚醒要靠明確呼叫 `wake_up`，不是被動偵測狀態改變 | 在 `blocking_read` 的 `dev->data_ready = 0;` 之後補上 `wake_up_interruptible(&dev->write_wq);`，跟 `blocking_write` 喚醒 `read_wq` 對稱 |
 
 > 註：源碼樹原本屬 root，編譯前先 `sudo chown -R $USER /usr/src/wsl2-headers-$(uname -r)`，之後編模組就不用 sudo（只有 insmod/rmmod 需要 root）。

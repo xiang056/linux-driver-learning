@@ -18,6 +18,7 @@ Module.symvers
 
 # ── 編譯出來的執行檔 ──
 simple_gpio/gpio_test
+blocking_io/poll_test
 
 # ── 暫存 / 雜項 ──
 *.swp
