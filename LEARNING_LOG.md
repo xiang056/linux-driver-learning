@@ -14,7 +14,7 @@
 - **實際時間**：第 4 週
 - **進度**：Device Tree 基礎概念學完（DTS/DTB/Overlay/屬性/compatible 配對），等拿到 Pi 5 後實測 overlay
 - **完成度**：約 65%
-- **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/` ｜ Buildroot 目錄 `~/linux-dev/buildroot/`
+- **環境**：WSL2 Ubuntu 22.04（交叉編譯）｜ Raspberry Pi 5 4GB（實機測試）｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
 
@@ -40,8 +40,8 @@
 | 二 | W11-12 | LDD3 Ch5-6 · 中斷/異步 I/O | ✅ 完成（platform_demo + blocking_io 全通過） |
 | 二 | W13-14 | LDD3 Ch7-9 · 時間/記憶體/DMA | 🟡 概念補強完成（jiffies/Timer/Workqueue/kmalloc vs vmalloc，見 2026-07-24 筆記），缺實際 timer driver 產出 |
 | 二 | W15-16 | Platform Driver + Device Tree | ⬜ |
-| 三 | W17-18 | QEMU ARM + Buildroot | ✅ 完成（vexpress-a9 開機成功，armv7l 確認） |
-| 三 | W19-20 | QEMU 上 GPIO Driver (sysfs) | ⬜ |
+| 三 | W17-18 | ARM 環境建置 | ✅ 完成（QEMU vexpress-a9 驗證過，改用 Raspberry Pi 5 實機） |
+| 三 | W19-20 | GPIO Driver + sysfs 介面 | ⬜ |
 | 三 | W21-22 | UART Driver | ⬜ |
 | 三 | W23-24 | 整合項目：多設備驅動框架 | ⬜ |
 
@@ -61,7 +61,7 @@
 | blocking_io | `~/linux-dev/blocking_io/` | 字元裝置，wait_queue 實作 blocking read/write | ✅ 完整實測通過（cat 睡眠等待 + write 喚醒） |
 | platform_demo | `~/linux-dev/platform_demo/` | platform_driver 完整版（資源取用 + 中斷 + drvdata + of_match_table）| ✅ 完整實測通過 |
 | platform uart | （待建） | platform_driver + device tree | ⬜ |
-| gpio_sysfs | （待建） | QEMU GPIO + sysfs 接口 | ⬜ |
+| gpio_sysfs | （待建） | GPIO + sysfs 接口（Pi 5 實機） | ⬜ |
 | uart_char | （待建） | 字符設備版 UART 驅動 | ⬜ |
 
 > 履歷目標：5+ 個完整驅動（character / platform / GPIO / UART）
