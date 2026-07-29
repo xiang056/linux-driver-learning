@@ -8,20 +8,21 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-28（platform_demo 在 QEMU 真實 ARM 環境驗證完成）
+> 最後更新：2026-07-29（Device Tree 概念學完）
 
-- **階段**：第三階段 — QEMU ARM 環境
-- **實際時間**：第 4 週（計劃進度提前跳到 W17-18）
-- **進度**：`platform_demo.ko` 成功在 QEMU vexpress-a9 上 `insmod`；驗證了 `devm_ioremap_resource` 在真實 MMIO 位址上會真的做資源衝突檢查（`-EBUSY`），跟 WSL2 x86 那種「RAM 不能 ioremap」是不同層級的失敗
-- **完成度**：約 62%
+- **階段**：第三階段 — QEMU ARM 環境 → W15-16 Device Tree
+- **實際時間**：第 4 週
+- **進度**：Device Tree 基礎概念學完（DTS/DTB/Overlay/屬性/compatible 配對），等拿到 Pi 5 後實測 overlay
+- **完成度**：約 65%
 - **環境**：WSL2 Ubuntu 22.04 ｜ 開發目錄 `~/linux-dev/` ｜ Buildroot 目錄 `~/linux-dev/buildroot/`
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
 
-1. **Platform Driver + Device Tree（W15-16）**——優先做這個，因為 `request_irq` 那個 bug 已經證明手動塞號碼在真實 GIC/sparse-irq 環境下走不通，需要真的懂 DT 綁定才能解，也是下一步 GPIO sysfs 的前提
-2. QEMU 上的 GPIO Driver（sysfs 介面）— 計劃表 W19-20
-3. （可選）把 `DEMO_MEM_START` 改成 `0x100e4000`（disabled 的 SP804 timer，目前沒人佔用），驗證一次 `devm_ioremap_resource` 真正成功的案例
-4. （可選，之後找時間補）W13-14 的 timer driver 動手實作——概念（jiffies/Timer/Workqueue/kmalloc vs vmalloc）已經在 2026-07-24 補強過，只差一個實際的 timer 驅動產出
+1. **拿到 Pi 5 後**：在 Pi 5 上實測 DT overlay，寫一個簡單的 overlay 掛載自訂節點，確認 compatible 配對觸發 probe()
+2. 學 sysfs 介面（W19-20）——`stm32_linux_bridge` 需要透過 sysfs 暴露資料
+3. 學 serdev 子系統——`stm32_linux_bridge` 的核心
+4. 開始實作 `stm32_linux_bridge`（Phase 0 → Phase 1 → ...）
+5. （可選）W13-14 timer driver 實作補上
 
 > （可選，先跳過）`poll_test.c` 加 `EPOLLOUT` + write_wq 喚醒驗證（用 fork + select 的 wfds，parent 卡住等可寫、child sleep 後讀空 buffer 觸發喚醒）。EPOLLIN 邏輯已驗證通過，EPOLLOUT 是同一段程式碼的對稱分支，風險不高，之後有餘力再補完整驗證。
 
@@ -213,6 +214,16 @@
   - **架構決定**：選 `serdev` 子系統（UART 接 MCU 的正確 kernel 框架，藍牙 HCI UART、GPS receiver 都用這套），不是 user space 直接讀 tty
   - **前置依賴**：`serdev` 的 Device Tree 綁定邏輯跟目前在學的 platform driver 相通，但 Device Tree 本身（W15-16）跟 sysfs 介面設計（W19-20）都還沒實測過——決定先把這兩塊計劃表走完，再回頭做這個 project，避免 DT + serdev 兩個新概念同時疊加卡關
   - **狀態**：純設計草稿，尚未開工
+
+- **2026-07-29** Device Tree 基礎概念（公司 Windows 環境，純概念學習）
+  - **DT 用途**：描述硬體給 kernel，不把位址寫死在 driver code 裡；kernel 啟動時讀進來，找對應 driver 呼叫 probe()
+  - **compatible 配對**：DTS 的 `compatible` 字串跟 driver 的 `of_device_id` 完全一樣才配對成功；可以放多個字串，kernel 從左到右找第一個符合的 driver（向後相容用途）
+  - **DTS vs DTB**：`.dts` 是人看的文字檔，`dtc` 編譯成 `.dtb`（二進位），kernel 開機時讀 `.dtb`
+  - **Overlay**：不動原本 DTB，只疊加新增部分；編譯成 `.dtbo`，樹莓派在 `config.txt` 加 `dtoverlay=xxx` 載入；開發自訂裝置時用這個，不需要重編整個 DTB
+  - **節點**：`{ }` 區塊，可巢狀；`label: name@address { }` 格式，有 label 才能用 `&label` 引用
+  - **`&` 引用**：overlay 裡用 `&uart0` 引用主 DTB 的節點，在它底下加子節點（serdev 裝置掛在 uart 底下就是這樣做）
+  - **常用屬性**：`reg`（位址+大小，platform_get_resource 讀這個）、`interrupts`（platform_get_irq 讀這個）、`status`（okay/disabled）、`clocks`、`pinctrl`
+  - **屬性型別**：`<>` 是整數、`""` 是字串、單獨一個屬性名代表 bool true
 
 - **2026-07-28** 完成 `poll_test.c`——user space select 測試程式（公司 Windows 環境純寫碼）
   - **select 流程**：`FD_ZERO` 清空集合 → `FD_SET` 把 fd 放進去 → `tv` 設逾時 → `select()` 等待 → `FD_ISSET` 確認哪個 fd 觸發
