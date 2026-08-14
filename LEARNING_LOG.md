@@ -8,20 +8,28 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-07-29（Device Tree 概念學完）
+> 最後更新：2026-08-14（Pi 5 硬體到齊，學習策略改為現學現用）
 
-- **階段**：第三階段 — QEMU ARM 環境 → W15-16 Device Tree
+- **階段**：第三階段 — Device Tree 概念完成 → 直接開工 `stm32_linux_bridge`
 - **實際時間**：第 4 週
-- **進度**：Device Tree 基礎概念學完（DTS/DTB/Overlay/屬性/compatible 配對），等拿到 Pi 5 後實測 overlay
+- **進度**：Pi 5 4GB + 散熱片/風扇 + SD 卡 + 電源已備妥；DT/sysfs/serdev 改為在 `stm32_linux_bridge` 專案裡現學現用，不再獨立練習
 - **完成度**：約 65%
 - **環境**：WSL2 Ubuntu 22.04（交叉編譯）｜ Raspberry Pi 5 4GB（實機測試）｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
 
-1. **拿到 Pi 5 後**：在 Pi 5 上實測 DT overlay，寫一個簡單的 overlay 掛載自訂節點，確認 compatible 配對觸發 probe()
-2. 學 sysfs 介面（W19-20）——`stm32_linux_bridge` 需要透過 sysfs 暴露資料
-3. 學 serdev 子系統——`stm32_linux_bridge` 的核心
-4. 開始實作 `stm32_linux_bridge`（Phase 0 → Phase 1 → ...）
+> **2026-08-14 調整學習策略**：不先把 DT/sysfs/serdev 當獨立練習學完才開工，
+> 改成直接在 `stm32_linux_bridge` 專案裡現學現用（見 DESIGN.md）。
+> 抽象練習學完沒有立刻用在真實目標上容易忘，綁在真實專案裡卡住當場查、
+> 當場學，記得住。Pi 5 硬體（含 SD 卡、電源）已備妥。
+
+1. **確認/採購 STM32 開發板**——Phase 0 驗證協議前需要
+2. **開始 `stm32_linux_bridge` Phase 0**：Pi 上用 Python/C 直接開
+   `/dev/serial0` 收送 frame，驗證 STM32 韌體端 framing/CRC 邏輯（不碰 kernel）
+3. **Phase 1**：寫 device tree overlay，現學現用 DT overlay 語法，
+   `compatible = "xiang,stm32-bridge"` 綁定，`probe()` 成功、`receive_buf`
+   印 dmesg 確認收到 raw bytes
+4. **Phase 2**：加 framing state machine + sysfs 介面（現學現用 sysfs）
 5. （可選）W13-14 timer driver 實作補上
 
 > （可選，先跳過）`poll_test.c` 加 `EPOLLOUT` + write_wq 喚醒驗證（用 fork + select 的 wfds，parent 卡住等可寫、child sleep 後讀空 buffer 觸發喚醒）。EPOLLIN 邏輯已驗證通過，EPOLLOUT 是同一段程式碼的對稱分支，風險不高，之後有餘力再補完整驗證。
@@ -208,6 +216,12 @@
   - `kmalloc`：實體連續，速度快，限制約 4MB，99% 的 driver 用這個
   - `vmalloc`：虛擬連續實體不連續，可分配大塊記憶體，速度慢，DMA 不能用
   - 選擇原則：小於 1MB 用 kmalloc，大於 1MB 用 vmalloc，DMA 用 dma_alloc_coherent
+
+- **2026-08-14** 調整學習策略：DT/sysfs/serdev 改為在 `stm32_linux_bridge` 裡現學現用
+  - **問題**：獨立練習 W15-16 DT overlay、W19-20 sysfs 這種抽象範例，學完沒有立刻用在真實目標上，容易忘
+  - **調整**：不再要求「先把計劃表走完再開工」，改成直接開始 `stm32_linux_bridge`，DT overlay 綁在 Phase 1 現學、sysfs 綁在 Phase 2 現學，卡住當場查
+  - **限制沒變**：`serdev` 裝置綁定機制本身依賴 Device Tree（`compatible` 配對觸發 `probe()`），這塊無法跳過，只是不用先做孤立練習，直接在 Phase 1 寫這個專案的 overlay 就是在學
+  - **硬體到位**：Raspberry Pi 5 4GB + 散熱片風扇 + microSD 卡 + 27W USB-C PD 電源已備妥，下一步是確認 STM32 開發板，然後直接開始 Phase 0
 
 - **2026-07-27** 草擬 `stm32_linux_bridge/DESIGN.md`——履歷作品構想
   - **目標**：STM32 韌體 + Linux `serdev` driver 的 coprocessor 系統，同時展示韌體與 kernel 兩邊能力，作為轉職履歷招牌作品

@@ -1,9 +1,17 @@
 # STM32 ↔ Linux Coprocessor Bridge — 設計草稿
 
-> 狀態：草擬中，尚未開工。目的：作為轉職 Embedded Linux 的招牌作品，
+> 狀態：草擬中，即將開工。目的：作為轉職 Embedded Linux 的招牌作品，
 > 同時展示 STM32 韌體設計能力 + Linux kernel driver 能力。
 > 與現有 `linux-dev/` 學習系列的關係：這是應用篇，前提是 blocking_io /
 > platform_demo 的 char driver、wait_queue、platform driver 基礎已經打穩。
+>
+> **學習策略（2026-08-14 調整）**：不先把 Device Tree（W15-16）、sysfs
+> （W19-20）、serdev 當成獨立練習學完才開工，而是直接在這個專案的
+> Phase 0~2 裡現學現用——DT overlay 綁 Phase 1、sysfs 綁 Phase 2、serdev
+> 貫穿全程。原因：抽象練習學完沒有立刻用在真實目標上容易忘，綁定在
+> 真實專案裡卡住當場查、當場學，記得住。serdev 的裝置綁定機制本身依賴
+> DT（`compatible` 配對觸發 `probe()`），這塊無法跳過，但不需要先做
+> 孤立的 DT 練習，直接在 Phase 1 寫這個專案的 overlay 就是在學。
 
 ---
 
@@ -119,15 +127,18 @@ serdev_device_driver (probe 綁定 device tree 節點)
 
 ## 6. 待確認/開工前要想清楚的事
 
-- [ ] 手上有沒有現成的 STM32 開發板 + Raspberry Pi（或類似 SBC）？沒有的話
-      先確認要買什麼型號
+- [x] Raspberry Pi 5 4GB 已到手（含散熱片風扇），SD 卡/電源已備妥
+- [x] STM32 開發板已有：**STM32F407VG Discovery**（168MHz Cortex-M4），
+      沿用自 `Smart-Car` 專案（GitHub: xiang056/Smart-Car）。該專案已有
+      **USART6 中斷驅動**收發、byte-by-byte 狀態機解析 BLE(HM-10)/UART
+      指令的實戰經驗，跟本專案第 3 節的 framing state machine 是同一套
+      邏輯，STM32 端韌體可以直接沿用/改寫既有程式碼，不用從零開始
 - [ ] 感測器/致動器要接什麼真實元件？（沒有的話 Phase 3 可以先用板載 LED
       代替致動器，感測資料可以先用 STM32 內建的 ADC 讀電位器代替，之後
       再換真感測器）
-- [ ] Device Tree overlay 這塊你目前還沒實測過（log 裡 W15-16 還是 ⬜），
-      建議先把現有計劃表 W15-16、W19-20 走完一部分，再回頭做這個
-      project 會比較順，`serdev` 的 device tree 綁定跟 platform driver
-      是同一套邏輯，不是全新的東西
+- [x] ~~先把 W15-16、W19-20 走完再開工~~ 已改為現學現用（見上方學習策略），
+      Device Tree / sysfs / serdev 直接綁在 Phase 0~2 裡學，`serdev` 的
+      device tree 綁定跟 platform driver 是同一套邏輯，不是全新的東西
 
 ---
 
