@@ -8,13 +8,13 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-08-14（新筆電 ThinkPad X13 裝好 Ubuntu 26.04，待裝工具鏈）
+> 最後更新：2026-08-18（Pi 5 映像檔下載好，卡在沒有 SD 卡槽，等讀卡機到貨）
 
 - **階段**：第三階段 — Device Tree 概念完成 → 直接開工 `stm32_linux_bridge`
 - **實際時間**：第 4 週
-- **進度**：Pi 5 4GB + 散熱片/風扇 + SD 卡 + 電源已備妥；ThinkPad X13 已裝好 Ubuntu 26.04 LTS（取代 WSL2 當主力開發機），交叉編譯工具鏈還沒裝；DT/sysfs/serdev 改為在 `stm32_linux_bridge` 專案裡現學現用，不再獨立練習
+- **進度**：Pi 5 4GB + 散熱片/風扇 + SD 卡 + 電源已備妥；ThinkPad X13 已裝好 Ubuntu 26.04 LTS（取代 WSL2 當主力開發機），交叉編譯工具鏈（build-essential/linux-headers/gcc-aarch64-linux-gnu/crossbuild-essential-arm64）與常用工具（git/vim/curl/htop/net-tools/tree/tftp-hpa）已裝完，SSH key（`~/.ssh/id_ed25519`，comment `thinkpad-to-pi5`，無 passphrase）已產生；Raspberry Pi OS Lite (64-bit) 映像檔已下載到 `~/下載/raspios_lite_arm64.img.xz`；改用手動指令（`dd` + 掛載開機分割區塞 `ssh`/`userconf.txt`/NetworkManager 設定檔）燒錄，不依賴 GUI 版 rpi-imager（snap 版本有 symbol lookup error 跑不動）；ThinkPad X13 沒有內建 SD 卡槽，已訂購 microSD 轉 USB 讀卡機，等貨到才能繼續燒錄；DT/sysfs/serdev 改為在 `stm32_linux_bridge` 專案裡現學現用，不再獨立練習
 - **完成度**：約 65%
-- **環境**：ThinkPad X13（Ubuntu 26.04 LTS，主力開發機，SSH 到 Pi）｜ WSL2 Ubuntu 22.04（既有交叉編譯環境，待搬遷）｜ Raspberry Pi 5 4GB（實機測試）｜ 開發目錄 `~/linux-dev/`
+- **環境**：ThinkPad X13（Ubuntu 26.04 LTS，主力開發機，SSH 到 Pi）｜ WSL2 Ubuntu 22.04（既有交叉編譯環境，待搬遷）｜ Raspberry Pi 5 4GB（實機測試，Wi-Fi 連 `TOTOLINK_A700R_5G`）｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
 
@@ -23,18 +23,17 @@
 > 抽象練習學完沒有立刻用在真實目標上容易忘，綁在真實專案裡卡住當場查、
 > 當場學，記得住。Pi 5 硬體（含 SD 卡、電源）已備妥。
 
-1. **ThinkPad 裝交叉編譯工具鏈**（新筆電目前只有裸 Ubuntu，這是眼下卡點）：
-
-   ```bash
-   sudo apt update && sudo apt upgrade -y
-   sudo apt install -y build-essential linux-headers-$(uname -r)
-   sudo apt install -y gcc-aarch64-linux-gnu crossbuild-essential-arm64
-   ssh-keygen -t ed25519 -C "thinkpad-to-pi5"
-   sudo apt install -y git vim curl htop net-tools tree tftp
-   ```
-
-   裝完驗證：`lsb_release -a` / `uname -r` / `gcc --version` / `aarch64-linux-gnu-gcc --version` / `cat ~/.ssh/id_ed25519.pub`
-2. **Pi 5 燒錄系統**：用 Raspberry Pi Imager 燒 64-bit OS Lite，headless 設定 Wi-Fi/SSH（貼上一步產生的公鑰）
+1. ~~ThinkPad 裝交叉編譯工具鏈~~ ✅ 2026-08-18 完成
+2. **Pi 5 燒錄系統**（等 microSD 讀卡機到貨後從這裡繼續）：
+   - 讀卡機插上 ThinkPad，`lsblk` 插卡前後各跑一次找出裝置代號（例如 `/dev/sdb`，務必確認別選錯到系統硬碟）
+   - `xz -dc ~/下載/raspios_lite_arm64.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync && sync`
+   - 掛載開機分割區（`/dev/sdX1`）：`touch ssh`（啟用 SSH）+ `userconf.txt`（帳號，密碼用 `openssl passwd -6` 產生 hash）
+   - 掛載系統分割區（`/dev/sdX2`）：塞 `/etc/NetworkManager/system-connections/preconfigured.nmconnection`（SSID `TOTOLINK_A700R_5G` + 密碼，`chmod 600`）
+   - 卸載、退卡、插 Pi 5 開機，`ping raspberrypi.local` 或 `nmap` 找 IP
+   - `ssh` 用密碼登入 → `ssh-copy-id` 裝上這把公鑰（之後免密碼）：
+     ```
+     ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBwQp5yTWsUX4SzuP/CWSjCg/WJUNSvYZ1nO3EN4McTh thinkpad-to-pi5
+     ```
 3. **確認 ThinkPad ↔ Pi 5 能 SSH 連通**
 4. **確認/採購 STM32 開發板**——Phase 0 驗證協議前需要
 5. **開始 `stm32_linux_bridge` Phase 0**：Pi 上用 Python/C 直接開
@@ -229,6 +228,14 @@
   - `kmalloc`：實體連續，速度快，限制約 4MB，99% 的 driver 用這個
   - `vmalloc`：虛擬連續實體不連續，可分配大塊記憶體，速度慢，DMA 不能用
   - 選擇原則：小於 1MB 用 kmalloc，大於 1MB 用 vmalloc，DMA 用 dma_alloc_coherent
+
+- **2026-08-18** ThinkPad X13 交叉編譯工具鏈裝好 + 開始 Pi 5 燒錄，卡在沒有 SD 卡槽
+  - **工具鏈**：`build-essential`、`linux-headers-$(uname -r)`、`gcc-aarch64-linux-gnu` / `crossbuild-essential-arm64`、`git`/`vim`/`curl`/`htop`/`net-tools`/`tree`/`tftp-hpa` 全部裝完；`apt install tftp` 找不到套件，官方已改名 `tftp-hpa`（廢棄套件被取代很常見，遇到就找 apt 的替代建議）
+  - **SSH key**：`ssh-keygen -t ed25519` 產生 `~/.ssh/id_ed25519`（無 passphrase），public key 固定不變，只要私鑰檔案沒被覆蓋/刪除就能一直重複用
+  - **rpi-imager GUI 版跑不動**：snap 版本 `symbol lookup error: undefined symbol __libc_pthread_init`（函式庫版本衝突），改用純指令流程繞過：`curl` 下載官方最新映像 `https://downloads.raspberrypi.com/raspios_lite_arm64_latest`（500MB）→ 之後 `xz -dc | sudo dd` 直接寫卡 → 手動掛開機分割區塞 `ssh` 空檔（開 SSH）+ `userconf.txt`（帳密，密碼要先用 `openssl passwd -6` 產生 hash）→ 掛系統分割區塞 `/etc/NetworkManager/system-connections/*.nmconnection`（Bookworm 已改用 NetworkManager，不再是 wpa_supplicant）設定 Wi-Fi
+  - **找 SSID 免用手機翻**：`nmcli device status` 直接看目前連線中的 Wi-Fi 名稱（本機是 `TOTOLINK_A700R_5G`），密碼可用 `sudo nmcli -s -f 802-11-wireless-security.psk connection show "<SSID>"` 取回已存的
+  - **卡住**：ThinkPad X13 兩側都沒有內建 SD 卡槽（只有 USB-A/USB-C），microSD 卡本身沒問題（ADATA 64GB，內附 SD 轉卡），但轉卡只是變大不是變 USB，仍需要另外買 microSD 轉 USB 讀卡機才能讓筆電讀到卡——已下單等貨到
+  - **下一步**：讀卡機到貨後接著跑 `lsblk`（插卡前後各一次找裝置代號）→ `dd` 寫卡 → 塞設定檔 → 開機找 IP → SSH 進去
 
 - **2026-08-14** 調整學習策略：DT/sysfs/serdev 改為在 `stm32_linux_bridge` 裡現學現用
   - **問題**：獨立練習 W15-16 DT overlay、W19-20 sysfs 這種抽象範例，學完沒有立刻用在真實目標上，容易忘
