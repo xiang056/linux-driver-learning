@@ -8,13 +8,13 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-08-14（Pi 5 硬體到齊，學習策略改為現學現用）
+> 最後更新：2026-08-14（新筆電 ThinkPad X13 裝好 Ubuntu 26.04，待裝工具鏈）
 
 - **階段**：第三階段 — Device Tree 概念完成 → 直接開工 `stm32_linux_bridge`
 - **實際時間**：第 4 週
-- **進度**：Pi 5 4GB + 散熱片/風扇 + SD 卡 + 電源已備妥；DT/sysfs/serdev 改為在 `stm32_linux_bridge` 專案裡現學現用，不再獨立練習
+- **進度**：Pi 5 4GB + 散熱片/風扇 + SD 卡 + 電源已備妥；ThinkPad X13 已裝好 Ubuntu 26.04 LTS（取代 WSL2 當主力開發機），交叉編譯工具鏈還沒裝；DT/sysfs/serdev 改為在 `stm32_linux_bridge` 專案裡現學現用，不再獨立練習
 - **完成度**：約 65%
-- **環境**：WSL2 Ubuntu 22.04（交叉編譯）｜ Raspberry Pi 5 4GB（實機測試）｜ 開發目錄 `~/linux-dev/`
+- **環境**：ThinkPad X13（Ubuntu 26.04 LTS，主力開發機，SSH 到 Pi）｜ WSL2 Ubuntu 22.04（既有交叉編譯環境，待搬遷）｜ Raspberry Pi 5 4GB（實機測試）｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
 
@@ -23,14 +23,27 @@
 > 抽象練習學完沒有立刻用在真實目標上容易忘，綁在真實專案裡卡住當場查、
 > 當場學，記得住。Pi 5 硬體（含 SD 卡、電源）已備妥。
 
-1. **確認/採購 STM32 開發板**——Phase 0 驗證協議前需要
-2. **開始 `stm32_linux_bridge` Phase 0**：Pi 上用 Python/C 直接開
+1. **ThinkPad 裝交叉編譯工具鏈**（新筆電目前只有裸 Ubuntu，這是眼下卡點）：
+
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   sudo apt install -y build-essential linux-headers-$(uname -r)
+   sudo apt install -y gcc-aarch64-linux-gnu crossbuild-essential-arm64
+   ssh-keygen -t ed25519 -C "thinkpad-to-pi5"
+   sudo apt install -y git vim curl htop net-tools tree tftp
+   ```
+
+   裝完驗證：`lsb_release -a` / `uname -r` / `gcc --version` / `aarch64-linux-gnu-gcc --version` / `cat ~/.ssh/id_ed25519.pub`
+2. **Pi 5 燒錄系統**：用 Raspberry Pi Imager 燒 64-bit OS Lite，headless 設定 Wi-Fi/SSH（貼上一步產生的公鑰）
+3. **確認 ThinkPad ↔ Pi 5 能 SSH 連通**
+4. **確認/採購 STM32 開發板**——Phase 0 驗證協議前需要
+5. **開始 `stm32_linux_bridge` Phase 0**：Pi 上用 Python/C 直接開
    `/dev/serial0` 收送 frame，驗證 STM32 韌體端 framing/CRC 邏輯（不碰 kernel）
-3. **Phase 1**：寫 device tree overlay，現學現用 DT overlay 語法，
+6. **Phase 1**：寫 device tree overlay，現學現用 DT overlay 語法，
    `compatible = "xiang,stm32-bridge"` 綁定，`probe()` 成功、`receive_buf`
    印 dmesg 確認收到 raw bytes
-4. **Phase 2**：加 framing state machine + sysfs 介面（現學現用 sysfs）
-5. （可選）W13-14 timer driver 實作補上
+7. **Phase 2**：加 framing state machine + sysfs 介面（現學現用 sysfs）
+8. （可選）W13-14 timer driver 實作補上
 
 > （可選，先跳過）`poll_test.c` 加 `EPOLLOUT` + write_wq 喚醒驗證（用 fork + select 的 wfds，parent 卡住等可寫、child sleep 後讀空 buffer 觸發喚醒）。EPOLLIN 邏輯已驗證通過，EPOLLOUT 是同一段程式碼的對稱分支，風險不高，之後有餘力再補完整驗證。
 
