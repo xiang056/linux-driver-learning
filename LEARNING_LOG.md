@@ -18,10 +18,13 @@
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
 
-> **2026-08-14 調整學習策略**：不先把 DT/sysfs/serdev 當獨立練習學完才開工，
-> 改成直接在 `stm32_linux_bridge` 專案裡現學現用（見 DESIGN.md）。
-> 抽象練習學完沒有立刻用在真實目標上容易忘，綁在真實專案裡卡住當場查、
-> 當場學，記得住。Pi 5 硬體（含 SD 卡、電源）已備妥。
+> **2026-08-19 再調整方向**：`stm32_linux_bridge` 主線交付物從 kernel
+> `serdev` driver 改成 **user-space systemd 服務**（見 DESIGN.md 第 0
+> 節）。原因：kernel driver 這塊目前還停留在「照教程走，還沒有能力
+> 獨立判斷」的階段，硬做成履歷主打作品站不住腳；Application/System 層
+> （daemon、systemd、穩定性、IPC）本身就是 Embedded Linux 職缺常見的
+> 真實工作內容，也是現在能真正說「每一行都懂為什麼這樣寫」的範圍。
+> DT/serdev/sysfs 降級為延伸項目，不是完工必要條件。
 
 1. ~~ThinkPad 裝交叉編譯工具鏈~~ ✅ 2026-08-18 完成
 2. **Pi 5 燒錄系統**（等 microSD 讀卡機到貨後從這裡繼續）：
@@ -35,14 +38,14 @@
      ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBwQp5yTWsUX4SzuP/CWSjCg/WJUNSvYZ1nO3EN4McTh thinkpad-to-pi5
      ```
 3. **確認 ThinkPad ↔ Pi 5 能 SSH 連通**
-4. **確認/採購 STM32 開發板**——Phase 0 驗證協議前需要
-5. **開始 `stm32_linux_bridge` Phase 0**：Pi 上用 Python/C 直接開
-   `/dev/serial0` 收送 frame，驗證 STM32 韌體端 framing/CRC 邏輯（不碰 kernel）
-6. **Phase 1**：寫 device tree overlay，現學現用 DT overlay 語法，
-   `compatible = "xiang,stm32-bridge"` 綁定，`probe()` 成功、`receive_buf`
-   印 dmesg 確認收到 raw bytes
-7. **Phase 2**：加 framing state machine + sysfs 介面（現學現用 sysfs）
-8. （可選）W13-14 timer driver 實作補上
+4. **確認/接線 STM32F407VG Discovery**（已有板子，沿用 Smart-Car）——Phase 0 驗證協議前需要
+5. **開始 `stm32_linux_bridge` Phase 0**：Pi 上用 Python 寫協議驗證腳本，直接開
+   `/dev/serial0` 收送 frame，驗證 STM32 韌體端 framing/CRC 邏輯
+6. **Phase 1**：把驗證腳本改寫成長駐程式——斷線重連、例外處理、log
+7. **Phase 2**：寫 `.service` unit file，systemd 開機自動啟動 + 崩潰自動重啟
+8. **Phase 3**：加 Unix domain socket 介面 + CLI 工具，完整閉環 demo
+9. （延伸，非必要）**Phase 4**：DT/serdev/sysfs 都真的理解後，回頭做 kernel driver 版本
+10. （可選）W13-14 timer driver 實作補上
 
 > （可選，先跳過）`poll_test.c` 加 `EPOLLOUT` + write_wq 喚醒驗證（用 fork + select 的 wfds，parent 卡住等可寫、child sleep 後讀空 buffer 觸發喚醒）。EPOLLIN 邏輯已驗證通過，EPOLLOUT 是同一段程式碼的對稱分支，風險不高，之後有餘力再補完整驗證。
 
