@@ -8,13 +8,13 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-08-18（Pi 5 映像檔下載好，卡在沒有 SD 卡槽，等讀卡機到貨）
+> 最後更新：2026-08-21（Pi 5 燒錄完成，ThinkPad ↔ Pi 5 SSH 免密碼連通 ✅，下一步接上 STM32F407VG Discovery）
 
 - **階段**：第三階段 — Device Tree 概念完成 → 直接開工 `stm32_linux_bridge`
 - **實際時間**：第 4 週
-- **進度**：Pi 5 4GB + 散熱片/風扇 + SD 卡 + 電源已備妥；ThinkPad X13 已裝好 Ubuntu 26.04 LTS（取代 WSL2 當主力開發機），交叉編譯工具鏈（build-essential/linux-headers/gcc-aarch64-linux-gnu/crossbuild-essential-arm64）與常用工具（git/vim/curl/htop/net-tools/tree/tftp-hpa）已裝完，SSH key（`~/.ssh/id_ed25519`，comment `thinkpad-to-pi5`，無 passphrase）已產生；Raspberry Pi OS Lite (64-bit) 映像檔已下載到 `~/下載/raspios_lite_arm64.img.xz`；改用手動指令（`dd` + 掛載開機分割區塞 `ssh`/`userconf.txt`/NetworkManager 設定檔）燒錄，不依賴 GUI 版 rpi-imager（snap 版本有 symbol lookup error 跑不動）；ThinkPad X13 沒有內建 SD 卡槽，已訂購 microSD 轉 USB 讀卡機，等貨到才能繼續燒錄；DT/sysfs/serdev 改為在 `stm32_linux_bridge` 專案裡現學現用，不再獨立練習
-- **完成度**：約 65%
-- **環境**：ThinkPad X13（Ubuntu 26.04 LTS，主力開發機，SSH 到 Pi）｜ WSL2 Ubuntu 22.04（既有交叉編譯環境，待搬遷）｜ Raspberry Pi 5 4GB（實機測試，Wi-Fi 連 `TOTOLINK_A700R_5G`）｜ 開發目錄 `~/linux-dev/`
+- **進度**：Pi 5 4GB + 散熱片/風扇 + SD 卡 + 電源已備妥；ThinkPad X13 已裝好 Ubuntu 26.04 LTS（取代 WSL2 當主力開發機），交叉編譯工具鏈與常用工具已裝完，SSH key（`~/.ssh/id_ed25519`，comment `thinkpad-to-pi5`）已產生，`gh` CLI 已登入；**Pi 5 已燒錄 Raspberry Pi OS（`6.18.34+rpt-rpi-2712`，Debian based）並成功 `ssh pi@pi5.local` 免密碼連通**；DT/sysfs/serdev 改為在 `stm32_linux_bridge` 專案裡現學現用，不再獨立練習
+- **完成度**：約 68%
+- **環境**：ThinkPad X13（Ubuntu 26.04 LTS，主力開發機）↔ Raspberry Pi 5 4GB（hostname `pi5`，Wi-Fi 連 `TOTOLINK_A700R_5G`，IP `192.168.1.10`，SSH key-only 登入）｜ WSL2 Ubuntu 22.04（既有交叉編譯環境，待搬遷）｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
 
@@ -27,17 +27,8 @@
 > DT/serdev/sysfs 降級為延伸項目，不是完工必要條件。
 
 1. ~~ThinkPad 裝交叉編譯工具鏈~~ ✅ 2026-08-18 完成
-2. **Pi 5 燒錄系統**（等 microSD 讀卡機到貨後從這裡繼續）：
-   - 讀卡機插上 ThinkPad，`lsblk` 插卡前後各跑一次找出裝置代號（例如 `/dev/sdb`，務必確認別選錯到系統硬碟）
-   - `xz -dc ~/下載/raspios_lite_arm64.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync && sync`
-   - 掛載開機分割區（`/dev/sdX1`）：`touch ssh`（啟用 SSH）+ `userconf.txt`（帳號，密碼用 `openssl passwd -6` 產生 hash）
-   - 掛載系統分割區（`/dev/sdX2`）：塞 `/etc/NetworkManager/system-connections/preconfigured.nmconnection`（SSID `TOTOLINK_A700R_5G` + 密碼，`chmod 600`）
-   - 卸載、退卡、插 Pi 5 開機，`ping raspberrypi.local` 或 `nmap` 找 IP
-   - `ssh` 用密碼登入 → `ssh-copy-id` 裝上這把公鑰（之後免密碼）：
-     ```
-     ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBwQp5yTWsUX4SzuP/CWSjCg/WJUNSvYZ1nO3EN4McTh thinkpad-to-pi5
-     ```
-3. **確認 ThinkPad ↔ Pi 5 能 SSH 連通**
+2. ~~Pi 5 燒錄系統~~ ✅ 2026-08-21 完成（詳細步驟與踩坑見下方學習筆記）
+3. ~~確認 ThinkPad ↔ Pi 5 能 SSH 連通~~ ✅ 2026-08-21 完成（`ssh pi@pi5.local` key-only 免密碼）
 4. **確認/接線 STM32F407VG Discovery**（已有板子，沿用 Smart-Car）——Phase 0 驗證協議前需要
 5. **開始 `stm32_linux_bridge` Phase 0**：Pi 上用 Python 寫協議驗證腳本，直接開
    `/dev/serial0` 收送 frame，驗證 STM32 韌體端 framing/CRC 邏輯
@@ -232,6 +223,16 @@
   - `vmalloc`：虛擬連續實體不連續，可分配大塊記憶體，速度慢，DMA 不能用
   - 選擇原則：小於 1MB 用 kmalloc，大於 1MB 用 vmalloc，DMA 用 dma_alloc_coherent
 
+- **2026-08-21** Pi 5 燒錄完成，ThinkPad ↔ Pi 5 SSH 免密碼連通
+  - **rpi-imager GUI 版跑不動**：snap 版本 `symbol lookup error: undefined symbol __libc_pthread_init`，改用純指令流程：`curl` 下載映像 → `xz -dc | sudo dd of=/dev/sda bs=4M status=progress conv=fsync` 直接寫卡，不用 GUI
+  - **開機分割區裡有 `user-data`/`meta-data`/`network-config`**：這版映像已改用 **cloud-init**（NoCloud datasource，`seed=file:///boot/firmware`），不是舊的 `userconf.txt` 方法；直接編輯 `user-data` 設定 `users`（`ssh_authorized_keys` 塞公鑰、`lock_passwd: true` 只允許 key 登入），`network-config` 用 netplan v2 格式設定 `wifis.wlan0.access-points` 塞 SSID/密碼、`regulatory-domain: TW`
+  - **關鍵坑：SSH 服務被 `sshswitch.service` 鎖住**——`openssh-server` 有裝、`ssh.service` 檔案存在，但 Raspberry Pi 系列映像沿用舊慣例：另有一個 `sshswitch.service`，開機時檢查開機分割區有沒有一個空檔案叫 `ssh`，有才真的啟動 SSH，這層開關獨立於 cloud-init 之外，即使 `user-data` 設好 `ssh_authorized_keys` 也不會生效。解法：`sudo touch /mnt/bootfs/ssh` 補上這個空檔案
+  - **離線除錯技巧**：Pi 開機失敗又沒接螢幕時，把卡拔回讀卡機、`sudo mount /dev/sda2 /mnt/rootfs` 掛系統分割區，直接讀 `/var/log/cloud-init-output.log` 看 cloud-init 執行紀錄；也可以用 `sudo journalctl --directory=/mnt/rootfs/var/log/journal -u <service>` 離線讀 systemd 日誌，不需要開機、不需要 chroot
+  - **Pi 沒有 RTC**：開機當下、NTP 對時前系統時間是亂的（log 顯示的日期會是映像檔建置時間附近），看到 log timestamp 對不上現在日期不用懷疑是舊 log，先確認是不是這個原因
+  - **找 Wi-Fi SSID/密碼免用手機翻**：`nmcli device status` 看目前連線中的 SSID；`sudo nmcli -s -f 802-11-wireless-security.psk connection show "<SSID>"` 取回已存密碼
+  - **硬體卡點**：ThinkPad X13 沒有內建 SD 卡槽，需要額外買 microSD 轉 USB 讀卡機才能讓筆電讀卡
+  - **除錯過程踩的操作型錯誤**：`sd**a**1` 打成 `sdal`（數字1 vs 字母l）、`/mnt/` 打成 `/mut/`——都是複製貼上而非手動輸入可以避免的低級錯誤
+
 - **2026-08-18** ThinkPad X13 交叉編譯工具鏈裝好 + 開始 Pi 5 燒錄，卡在沒有 SD 卡槽
   - **工具鏈**：`build-essential`、`linux-headers-$(uname -r)`、`gcc-aarch64-linux-gnu` / `crossbuild-essential-arm64`、`git`/`vim`/`curl`/`htop`/`net-tools`/`tree`/`tftp-hpa` 全部裝完；`apt install tftp` 找不到套件，官方已改名 `tftp-hpa`（廢棄套件被取代很常見，遇到就找 apt 的替代建議）
   - **SSH key**：`ssh-keygen -t ed25519` 產生 `~/.ssh/id_ed25519`（無 passphrase），public key 固定不變，只要私鑰檔案沒被覆蓋/刪除就能一直重複用
@@ -339,6 +340,7 @@
 | 2026-07-28 | QEMU 真實環境 `request_irq(80)` 回傳 `-EINVAL` | 手動 `platform_device_register` 塞的 IRQ 號碼沒有透過 device tree 做 irq mapping，sparse IRQ 系統下該號碼沒有對應的 `irq_desc` | 治標：probe 對 IRQ 失敗只警告不 return；治本：要用 Device Tree overlay 讓裝置真的被 `irq_of_parse_and_map()` 解析（W15-16 待補） |
 | 2026-07-28 | QEMU 真實環境 `devm_ioremap_resource` 回傳 `-EBUSY`（-16）| `0x10000000` 已被系統其他 driver（推測 v2m_sysreg）佔用記憶體區域 | 換一個目前沒人用的位址（例如 `status="disabled"` 的 `timer@100e4000`）即可成功 |
 | 2026-07-27 | `blocking_io` 的 poll 機制：select/poll 等 `EPOLLOUT` 的 process 讀完資料後永遠不會醒 | `blocking_read` 把 `data_ready` 設回 0（buffer 變空、變可寫）後，沒有呼叫 `wake_up_interruptible(&dev->write_wq)`；`poll_wait()` 只是登記，真正喚醒要靠明確呼叫 `wake_up`，不是被動偵測狀態改變 | 在 `blocking_read` 的 `dev->data_ready = 0;` 之後補上 `wake_up_interruptible(&dev->write_wq);`，跟 `blocking_write` 喚醒 `read_wq` 對稱 |
+| 2026-08-21 | Pi 5 燒好開機後 `ssh pi@pi5.local` 一直 `Connection refused`，`ping` 卻正常 | `openssh-server` 有裝、cloud-init 也跑完了，但 Raspberry Pi 系列映像另外用 `sshswitch.service` 擋著：開機分割區沒有空檔案 `ssh`，SSH 服務就不會真的啟動，這層開關獨立於 cloud-init 之外 | `sudo touch /mnt/bootfs/ssh` 補上這個檔案，重開機後 SSH 就通了；離線除錯技巧：`sudo mount /dev/sda2 /mnt/rootfs` 後直接讀 `/var/log/cloud-init-output.log` 或 `sudo journalctl --directory=/mnt/rootfs/var/log/journal -u <service>`，不用開機、不用 chroot |
 
 > 註：源碼樹原本屬 root，編譯前先 `sudo chown -R $USER /usr/src/wsl2-headers-$(uname -r)`，之後編模組就不用 sudo（只有 insmod/rmmod 需要 root）。
 
