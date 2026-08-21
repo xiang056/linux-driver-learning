@@ -8,13 +8,13 @@
 
 ## 📍 目前位置（每次開工先看這裡）
 
-> 最後更新：2026-08-21（Pi 5 燒錄完成，ThinkPad ↔ Pi 5 SSH 免密碼連通 ✅，下一步接上 STM32F407VG Discovery）
+> 最後更新：2026-08-22（STM32 ↔ Pi 5 USART3 接通，A-1 echo test 1000 次無掉字 ✅，下一步 A-2 輪速量測）
 
-- **階段**：第三階段 — Device Tree 概念完成 → 直接開工 `stm32_linux_bridge`
+- **階段**：第三階段 — `stm32_linux_bridge` 開工中，硬體鏈路已打通
 - **實際時間**：第 4 週
-- **進度**：Pi 5 4GB + 散熱片/風扇 + SD 卡 + 電源已備妥；ThinkPad X13 已裝好 Ubuntu 26.04 LTS（取代 WSL2 當主力開發機），交叉編譯工具鏈與常用工具已裝完，SSH key（`~/.ssh/id_ed25519`，comment `thinkpad-to-pi5`）已產生，`gh` CLI 已登入；**Pi 5 已燒錄 Raspberry Pi OS（`6.18.34+rpt-rpi-2712`，Debian based）並成功 `ssh pi@pi5.local` 免密碼連通**；DT/sysfs/serdev 改為在 `stm32_linux_bridge` 專案裡現學現用，不再獨立練習
-- **完成度**：約 68%
-- **環境**：ThinkPad X13（Ubuntu 26.04 LTS，主力開發機）↔ Raspberry Pi 5 4GB（hostname `pi5`，Wi-Fi 連 `TOTOLINK_A700R_5G`，IP `192.168.1.10`，SSH key-only 登入）｜ WSL2 Ubuntu 22.04（既有交叉編譯環境，待搬遷）｜ 開發目錄 `~/linux-dev/`
+- **進度**：Pi 5 已燒錄、ThinkPad ↔ Pi 5 SSH 免密碼連通；**STM32F407VG Discovery ↔ Pi 5 UART 硬體鏈路已驗證**（USART3 PD8/PD9 ↔ Pi GPIO14/15，115200 8N1，`pi5_link.c` echo test 1000/1000 過），韌體工作移到 `~/linux-dev/Smart-Car` repo 的 `feature/pi5` 分支進行（詳見該 repo `md/RTOS_Practice_Plan.md`）；DT/sysfs/serdev 改為在 `stm32_linux_bridge` 專案裡現學現用，不再獨立練習
+- **完成度**：約 70%
+- **環境**：ThinkPad X13（Ubuntu 26.04 LTS，主力開發機，VSCode workspace 同時開 `linux-driver-learning` + `Smart-Car`）↔ Raspberry Pi 5 4GB（hostname `pi5`，Wi-Fi 連 `TOTOLINK_A700R_5G`，SSH key-only 登入，UART0 已開啟 `dtparam=uart0=on`）↔ STM32F407VG Discovery（另一台 Windows 電腦用 STM32CubeIDE 燒錄，跟這台 ThinkPad 靠 git push/pull 同步）｜ WSL2 Ubuntu 22.04（既有交叉編譯環境，待搬遷）｜ 開發目錄 `~/linux-dev/`
 
 ### ▶️ 下一步要做的事（回家從這裡開始）
 
@@ -26,12 +26,21 @@
 > 真實工作內容，也是現在能真正說「每一行都懂為什麼這樣寫」的範圍。
 > DT/serdev/sysfs 降級為延伸項目，不是完工必要條件。
 
+> **⚠️ 2026-08-22 修正**：Pi 5 的 `/dev/serial0` 符號連結指向主機板上獨立的
+> 3-pin debug 接頭（`ttyAMA10`），**不是** GPIO14/15！這是 Pi 4 沿用下來會
+> 誤判的坑。GPIO14/15 這組硬體 UART 要用 **`/dev/ttyAMA0`**，且預設關閉，
+> 要在 `/boot/firmware/config.txt` 加 `dtparam=uart0=on` 才會出現。下面第
+> 5 項已經更新成正確路徑。
+
 1. ~~ThinkPad 裝交叉編譯工具鏈~~ ✅ 2026-08-18 完成
 2. ~~Pi 5 燒錄系統~~ ✅ 2026-08-21 完成（詳細步驟與踩坑見下方學習筆記）
 3. ~~確認 ThinkPad ↔ Pi 5 能 SSH 連通~~ ✅ 2026-08-21 完成（`ssh pi@pi5.local` key-only 免密碼）
-4. **確認/接線 STM32F407VG Discovery**（已有板子，沿用 Smart-Car）——Phase 0 驗證協議前需要
+4. ~~確認/接線 STM32F407VG Discovery~~ ✅ 2026-08-22 完成（USART3 PD8/PD9 ↔ Pi GPIO14/15，1000 次 echo 無掉字，詳見下方學習筆記與 `Smart-Car/DEVLOG.md`）
 5. **開始 `stm32_linux_bridge` Phase 0**：Pi 上用 Python 寫協議驗證腳本，直接開
-   `/dev/serial0` 收送 frame，驗證 STM32 韌體端 framing/CRC 邏輯
+   **`/dev/ttyAMA0`**（不是 `/dev/serial0`）收送 frame，驗證 STM32 韌體端 framing/CRC 邏輯——
+   STM32 端在 `Smart-Car/feature/pi5` 分支繼續往下做 A-2/A-3（輪速、PID+IMU），
+   等那邊有實際協議格式（見 `RTOS_Practice_Plan.md` 第 6 節 UART 通訊協定）
+   再對應寫 Pi 端解析邏輯
 6. **Phase 1**：把驗證腳本改寫成長駐程式——斷線重連、例外處理、log
 7. **Phase 2**：寫 `.service` unit file，systemd 開機自動啟動 + 崩潰自動重啟
 8. **Phase 3**：加 Unix domain socket 介面 + CLI 工具，完整閉環 demo
@@ -223,6 +232,14 @@
   - `vmalloc`：虛擬連續實體不連續，可分配大塊記憶體，速度慢，DMA 不能用
   - 選擇原則：小於 1MB 用 kmalloc，大於 1MB 用 vmalloc，DMA 用 dma_alloc_coherent
 
+- **2026-08-22** STM32 ↔ Pi 5 USART3 硬體鏈路打通（A-1 echo test）
+  - **兩個 repo 接力開發**：`Smart-Car`（STM32 韌體，`feature/pi5` 分支）跟 `linux-driver-learning/stm32_linux_bridge`（Pi/host 端）是同一個作品的兩半，不合併成一個 git repo（工具鏈、部署方式完全不同），VSCode 用 multi-root workspace（`File → Add Folder to Workspace`）同時開兩個資料夾方便編輯，但 commit/push 各自獨立
+  - **跨機器同步流程**：STM32CubeIDE 只在 Windows 那台裝，ThinkPad 這邊寫程式碼後 commit + push，Windows 那邊 `git pull` 拉下來才能編譯燒錄；改動小、來回頻繁時這個流程有點慢，但目前沒有更好的替代方案
+  - **CubeMX 換腳位**：不需要先手動取消舊腳位，直接在晶片圖上點新腳位（例如 PD8）選對應功能，CubeMX 會自動把舊腳位（PB10）的綁定釋放掉
+  - **中斷 callback 不要做阻塞式操作**：`pi5_link_rx_callback`（在 `HAL_UART_RxCpltCallback` 裡被呼叫）只做「存資料、設 pending flag」，真正的 `HAL_UART_Transmit`（阻塞式）放到主迴圈的 `pi5_link_process()`，避免長時間卡在 ISR 裡；跟現有 `bluetooth.c` 是同一個模式
+  - **關鍵除錯技巧：用「自我迴路」隔離兩端**——接線後完全無回應（不是內容錯，是 0 byte 回應），不知道是 Pi 端還是 STM32 端的問題時，暫時把 Pi 的 TXD(pin8) 直接接回自己的 RXD(pin10)，讓 Pi 自己送自己收，完全繞過對方裝置。這次測試 20/20 全過，證明 Pi 端完全沒問題，問題鎖定在 STM32/接線；重新拔插三條線後就正常了（判斷是接觸不良）。**這招比看 debugger 斷點更快，不需要對方裝置配合，之後任何 UART 對接卡住都可以先用這招定位是哪一側的問題**
+  - **STM32CubeIDE 除錯器基本操作**：Debug 模式啟動預設會停在 `main()` 第一行（`HAL_Init()`），需要按 Resume（▶️ 或 F8）才會繼續往下跑；斷點設在程式碼行號正左邊那條窄欄雙擊，成功會出現藍色小圓點；命中斷點時該行會反色、`Debug` 視窗會顯示呼叫堆疊
+
 - **2026-08-21** Pi 5 燒錄完成，ThinkPad ↔ Pi 5 SSH 免密碼連通
   - **rpi-imager GUI 版跑不動**：snap 版本 `symbol lookup error: undefined symbol __libc_pthread_init`，改用純指令流程：`curl` 下載映像 → `xz -dc | sudo dd of=/dev/sda bs=4M status=progress conv=fsync` 直接寫卡，不用 GUI
   - **開機分割區裡有 `user-data`/`meta-data`/`network-config`**：這版映像已改用 **cloud-init**（NoCloud datasource，`seed=file:///boot/firmware`），不是舊的 `userconf.txt` 方法；直接編輯 `user-data` 設定 `users`（`ssh_authorized_keys` 塞公鑰、`lock_passwd: true` 只允許 key 登入），`network-config` 用 netplan v2 格式設定 `wifis.wlan0.access-points` 塞 SSID/密碼、`regulatory-domain: TW`
@@ -341,6 +358,9 @@
 | 2026-07-28 | QEMU 真實環境 `devm_ioremap_resource` 回傳 `-EBUSY`（-16）| `0x10000000` 已被系統其他 driver（推測 v2m_sysreg）佔用記憶體區域 | 換一個目前沒人用的位址（例如 `status="disabled"` 的 `timer@100e4000`）即可成功 |
 | 2026-07-27 | `blocking_io` 的 poll 機制：select/poll 等 `EPOLLOUT` 的 process 讀完資料後永遠不會醒 | `blocking_read` 把 `data_ready` 設回 0（buffer 變空、變可寫）後，沒有呼叫 `wake_up_interruptible(&dev->write_wq)`；`poll_wait()` 只是登記，真正喚醒要靠明確呼叫 `wake_up`，不是被動偵測狀態改變 | 在 `blocking_read` 的 `dev->data_ready = 0;` 之後補上 `wake_up_interruptible(&dev->write_wq);`，跟 `blocking_write` 喚醒 `read_wq` 對稱 |
 | 2026-08-21 | Pi 5 燒好開機後 `ssh pi@pi5.local` 一直 `Connection refused`，`ping` 卻正常 | `openssh-server` 有裝、cloud-init 也跑完了，但 Raspberry Pi 系列映像另外用 `sshswitch.service` 擋著：開機分割區沒有空檔案 `ssh`，SSH 服務就不會真的啟動，這層開關獨立於 cloud-init 之外 | `sudo touch /mnt/bootfs/ssh` 補上這個檔案，重開機後 SSH 就通了；離線除錯技巧：`sudo mount /dev/sda2 /mnt/rootfs` 後直接讀 `/var/log/cloud-init-output.log` 或 `sudo journalctl --directory=/mnt/rootfs/var/log/journal -u <service>`，不用開機、不用 chroot |
+| 2026-08-22 | Pi 5 上 `pi` 帳號設成 SSH key-only（cloud-init `lock_passwd: true`）後，`sudo` 一直要求密碼、怎麼打都失敗 | 帳號根本沒有設密碼（故意鎖住密碼登入），`sudo` 預設要密碼驗證，變成永遠無法通過的死結；且 Pi 5 沒有實體電源鍵，這種情況下連 `shutdown` 都做不到，只能直接拔電源 | 把卡拔回讀卡機掛系統分割區，加 `/etc/sudoers.d/010-pi-nopasswd` 內容 `pi ALL=(ALL) NOPASSWD:ALL`（`chmod 0440`）——**用 key-only 帳號時要記得一併設定免密碼 sudo，這是標準配套，不是可省略的步驟** |
+| 2026-08-22 | 照著 Pi 4 的習慣寫 `/dev/serial0` 收送 UART 資料，實測完全不通 | Pi 5 的 `/dev/serial0` 符號連結指向主機板上獨立的 3-pin debug 接頭（`ttyAMA10`），不是 GPIO14/15；GPIO14/15 這組硬體 UART 要用 `/dev/ttyAMA0`，且預設關閉 | 用 `/dev/ttyAMA0`；`config.txt` 加 `dtparam=uart0=on` 開啟；用 `pinctrl get 14,15` 確認腳位功能是不是 `a4`（UART0），比看裝置節點存不存在更可靠 |
+| 2026-08-22 | STM32 ↔ Pi 5 UART 接線後完全無回應（0 byte，不是內容錯） | 杜邦線接觸不良（重新拔插三條線後就正常了） | 用「自我迴路」隔離兩端：暫時把 Pi 的 TXD 直接接回自己的 RXD，讓 Pi 自己送自己收，繞過對方裝置。這次跑通代表問題在對方那一側，比看 debugger 斷點更快定位 |
 
 > 註：源碼樹原本屬 root，編譯前先 `sudo chown -R $USER /usr/src/wsl2-headers-$(uname -r)`，之後編模組就不用 sudo（只有 insmod/rmmod 需要 root）。
 
