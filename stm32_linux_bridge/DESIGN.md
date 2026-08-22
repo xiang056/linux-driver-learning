@@ -35,7 +35,7 @@ Linux 系統服務**，而不是 kernel module：
 - **STM32**：跑一個簡化版的感測器/致動器韌體（沿用你現有的 ISR 狀態機
   經驗），透過 UART 送出結構化資料，也接受簡單指令。
 - **Linux（Raspberry Pi）**：寫一個 **user-space daemon**，透過
-  `/dev/serial0` 跟 STM32 對話，解析協議、處理斷線重連、寫 log，並且
+  `/dev/ttyAMA0` 跟 STM32 對話，解析協議、處理斷線重連、寫 log，並且
   透過一個簡單介面（Unix domain socket 或本機 HTTP API）讓其他程式能
   查詢/控制 STM32 狀態，用 `systemd` 管理成開機自動啟動的常駐服務。
 
@@ -58,10 +58,12 @@ Linux 系統服務**，而不是 kernel module：
 └─────────────┘                       └──────────────────┘
 ```
 
-- 接線：STM32 UART TX/RX 接到 Pi 的 GPIO14/15（`/dev/ttyAMA0` 或
-  `/dev/serial0`），共地。**注意電平**：STM32 通常 3.3V，Pi GPIO 也是
-  3.3V，理論上可以直接接，但務必先量測確認，避免燒板子。
+- 接線：STM32 UART TX/RX 接到 Pi 的 GPIO14/15（`/dev/ttyAMA0`；**不是**
+  `/dev/serial0`，Pi 5 上那個指向獨立的 debug 接頭，是 Pi 4 沿用下來會
+  誤判的坑），共地。兩邊都是 3.3V logic，可直連。
 - STM32 板：沿用 `Smart-Car` 專案的 **STM32F407VG Discovery**。
+- **已實測驗證**（2026-08-22，見 `Smart-Car/DEVLOG.md` A-1）：USART3
+  PD8/PD9 ↔ Pi GPIO14/15，115200 8N1，raw byte echo test 1000 次無掉字。
 
 ---
 
@@ -93,7 +95,7 @@ Linux 系統服務**，而不是 kernel module：
 ```
 stm32bridged（systemd 服務，Python 或 C）
         │
-        ├─ 開 /dev/serial0，framing state machine byte-by-byte 解析
+        ├─ 開 /dev/ttyAMA0，framing state machine byte-by-byte 解析
         │   （跟 STM32 端邏輯對稱）
         │
         ├─ 斷線偵測 + 自動重連（拔插 USB-UART 轉接板、STM32 重啟都要撐得住）
@@ -104,12 +106,12 @@ stm32bridged（systemd 服務，Python 或 C）
         │   （選一種：Unix domain socket 簡單文字協議 / 本機 HTTP API）
         │
         └─ 外部程式送控制指令 → daemon 組 CMD_SET_ACTUATOR frame →
-           寫進 /dev/serial0 送給 STM32
+           寫進 /dev/ttyAMA0 送給 STM32
 ```
 
 **開發階段（每個階段都能單獨 demo，不用等全部做完）：**
 
-1. **Phase 0 — 協議驗證腳本**：Pi 上用 Python 直接開 `/dev/serial0`
+1. **Phase 0 — 協議驗證腳本**：Pi 上用 Python 直接開 `/dev/ttyAMA0`
    收送 frame，確認 STM32 韌體端的 framing/CRC 邏輯正確。單純一支腳本，
    跑完看結果即可，這階段只求「兩邊講同一種語言」。
 2. **Phase 1 — 服務化**：把 Phase 0 的邏輯改寫成長駐程式：斷線重連、
@@ -157,9 +159,11 @@ kernel-space 兩種實作路徑的取捨」，變成加分項，但不是主線�
       **USART6 中斷驅動**收發、byte-by-byte 狀態機解析 BLE(HM-10)/UART
       指令的實戰經驗，跟本專案第 3 節的 framing state machine 是同一套
       邏輯，STM32 端韌體可以直接沿用/改寫既有程式碼，不用從零開始
-- [ ] 感測器/致動器要接什麼真實元件？（沒有的話可以先用板載 LED代替
-      致動器，感測資料可以先用 STM32 內建的 ADC 讀電位器代替，之後
-      再換真感測器）
+- [x] 感測器/致動器決定：**沒有外接感測器/編碼器**（`Smart-Car` 的馬達沒有
+      encoder），改用板載元件——`CMD_SET_ACTUATOR` 控制 **PD13 板載橘色
+      LED**（已設定好但沒被用到，直接可用）；`CMD_SENSOR_REPORT` 用
+      **STM32 內建溫度感測器（ADC1 internal channel）**，需要在 CubeMX
+      加一個 ADC1 設定（Windows 端待辦，不影響先開發 LED 控制那半邊）
 - [x] Pi 5 燒錄系統進行中，等 microSD 讀卡機到貨（見 LEARNING_LOG）
 - [x] kernel driver（DT/serdev/sysfs）降級為延伸項目，主線改為
       user-space systemd 服務，不再是開工前的必要前置知識
